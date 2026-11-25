@@ -214,11 +214,24 @@ def fetch(i, s, a, style, used, cache):
         cached_credit = open(mp, encoding='utf-8').read() if os.path.exists(mp) else 'cached'
         if a.allow_cards or not cached_credit.startswith('designed card'):
             return Image.open(cp).convert('RGB'), cached_credit
-    r = src_local(i, a.media); gp = s['gen_prompt']; order = ['photo', 'gen'] if (s['visual'] == 'photo' and a.source != 'gen') or a.source == 'photo' else ['gen', 'photo']
+    r = src_local(i, a.media); gp = s['gen_prompt']
+    if a.source == 'gen':
+        order = ['gen']
+    elif a.source == 'photo':
+        order = ['photo']
+    else:
+        order = ['photo', 'gen'] if s['visual'] == 'photo' else ['gen', 'photo']
     for kind in order:
         if r: break
         r = (src_commons(s['queries'], used) or src_pexels(s['queries'], used)) if kind == 'photo' else (src_gemini(gp) or src_pollinations(gp, i * 7 + 3))
-    if not r: r = (card(re.sub(r'\s+', ' ', s['text'])[:90], ACC.get(style, ACC['history'])), 'designed card')
+    if not r:
+        if not a.allow_cards:
+            raise RuntimeError(
+                f"No usable visual found for scene {i + 1}: {s['text'][:100]!r}. "
+                "Set GEMINI_API_KEY or PEXELS_API_KEY, add a local media/<scene-number>.jpg, "
+                "or explicitly use --allow-cards to accept a text-card fallback."
+            )
+        r = (card(re.sub(r'\s+', ' ', s['text'])[:90], ACC.get(style, ACC['history'])), 'designed card')
     im = r[0].convert('RGB'); im.save(cp, quality=93); open(mp, 'w').write(r[1]); return im, r[1]
 def compose(im, W=1920, H=1080):
     """cover-crop if aspect ok, else blurred-fill background + contained sharp image"""
@@ -403,10 +416,31 @@ def kar(text, d, speech):
     return out
 
 # ================================================================ main
+def select_video_encoder(requested):
+    """Use Intel Quick Sync only when the installed FFmpeg can actually initialize it."""
+    if requested == 'libx264':
+        return 'libx264'
+    try:
+        probe = subprocess.run(
+            ['ffmpeg', '-hide_banner', '-v', 'error', '-f', 'lavfi', '-i',
+             'color=c=black:s=64x64:d=0.1', '-frames:v', '1', '-c:v', 'h264_qsv', '-f', 'null', '-'],
+            capture_output=True, text=True, timeout=20
+        )
+        if probe.returncode == 0:
+            print('video encoder: Intel Quick Sync (h264_qsv)', flush=True)
+            return 'h264_qsv'
+        reason = (probe.stderr or probe.stdout or 'QSV initialization failed').strip().splitlines()[-1]
+    except Exception as exc:
+        reason = str(exc)
+    if requested == 'h264_qsv':
+        raise SystemExit('Intel Quick Sync was requested but is unavailable: ' + reason)
+    print('video encoder: Intel QSV unavailable -> CPU libx264 fallback (' + reason[:180] + ')', flush=True)
+    return 'libx264'
+
 def main():
     ap = argparse.ArgumentParser(); ap.add_argument('script'); ap.add_argument('out', nargs='?', default='modern.mp4'); ap.add_argument('--plan'); ap.add_argument('--prompt-only', action='store_true'); ap.add_argument('--voice', default='en-US-AndrewMultilingualNeural'); ap.add_argument('--rate', default='+0%')
     ap.add_argument('--source', default='auto', choices=['auto', 'photo', 'gen']); ap.add_argument('--media', default='media'); ap.add_argument('--music', default='music'); ap.add_argument('--preview', action='store_true'); ap.add_argument('--silent', action='store_true'); ap.add_argument('--endcard', action='store_true')
-    ap.add_argument('--style', default=None); ap.add_argument('--provider', default='auto'); ap.add_argument('--model', default=os.environ.get('LEGO_MODEL')); ap.add_argument('--nomusic', action='store_true'); ap.add_argument('--musicvol', type=float, default=.55); ap.add_argument('--cache', default='cache'); ap.add_argument('--save-plan', default='modern_plan.json'); ap.add_argument('--allow-cards', action='store_true', help='Allow designed text cards when no visual provider succeeds.'); a = ap.parse_args()
+    ap.add_argument('--style', default=None); ap.add_argument('--provider', default='auto'); ap.add_argument('--model', default=os.environ.get('LEGO_MODEL')); ap.add_argument('--nomusic', action='store_true'); ap.add_argument('--musicvol', type=float, default=.55); ap.add_argument('--cache', default='cache'); ap.add_argument('--save-plan', default='modern_plan.json'); ap.add_argument('--allow-cards', action='store_true', help='Allow designed text cards when no visual provider succeeds.'); ap.add_argument('--encoder', choices=['auto', 'libx264', 'h264_qsv'], default='auto'); ap.add_argument('--resolution', choices=['720p', '1080p'], default='1080p'); a = ap.parse_args()
     script = open(a.script, encoding='utf-8').read()
     if a.prompt_only: open('modern_prompt.txt', 'w', encoding='utf-8').write(SYSTEM + '\n\nSCRIPT:\n' + script); return print('Wrote modern_prompt.txt -> paste into Claude.ai, save the JSON reply as modern_plan.json, run with --plan modern_plan.json')
     if shutil.which('ffmpeg') is None: raise SystemExit('ffmpeg not in PATH (winget install ffmpeg)')
@@ -416,7 +450,7 @@ def main():
         if not plan: raise SystemExit('No LLM key (ANTHROPIC_API_KEY / GEMINI_API_KEY / GROQ_API_KEY). Use --prompt-only, paste the prompt into Claude.ai and re-run with --plan modern_plan.json')
         json.dump(plan, open(a.save_plan, 'w', encoding='utf-8'), indent=1); print('plan saved', a.save_plan, flush=True)
     plan = prepare_plan(plan, script, a.style)
-    plan = adapt(plan, a.style); style = plan['style']; W, H, FPS = (640, 360, 12) if a.preview else (1280, 720, 24); os.makedirs(a.cache, exist_ok=True); net_check() if a.source != 'gen' else None; used = set(); scenes = []; credits = []
+    plan = adapt(plan, a.style); style = plan['style']; W, H, FPS = (640, 360, 12) if a.preview else ((1920, 1080, 24) if a.resolution == '1080p' else (1280, 720, 24)); os.makedirs(a.cache, exist_ok=True); net_check() if a.source != 'gen' else None; used = set(); scenes = []; credits = []
     rate = {'tense': '-4%', 'sad': '-6%', 'calm': '-2%', 'epic': '+0%', 'up': '+5%'}; tts = None if a.silent else tts_scene(a, rate); t0 = 0.0
     for i, s in enumerate(plan['scenes']):
         print(f'scene {i + 1}/{len(plan["scenes"])}: {s["text"][:60]}', flush=True); im, cr = fetch(i, s, a, style, used, a.cache); print('   ->', cr.split(' | ')[0], flush=True); credits.append(f'{i + 1}. {cr}')
@@ -430,7 +464,11 @@ def main():
         sa += [(t0 + .3 + j * .5, x) for j, x in enumerate(s['sfx'][:2])]; sc['sfx_at'] = [(t_, n_) for t_, n_ in sa if t_ >= 0]; scenes.append(sc); t0 += d
     total = t0; print(f'duration {total:.1f}s scenes {len(scenes)}', flush=True); wavp = a.out.rsplit('.', 1)[0] + '_audio.wav'; build_audio(scenes, total, a, wavp)
     R = Ren(W, H, FPS, ACC.get(style, ACC['history']), style); nf = int(total * FPS)
-    pr = subprocess.Popen(['ffmpeg', '-y', '-loglevel', 'error', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-s', f'{W}x{H}', '-r', str(FPS), '-i', '-', '-i', wavp, '-c:v', 'libx264', '-preset', 'medium', '-crf', '20', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '192k', '-shortest', '-movflags', '+faststart', a.out], stdin=subprocess.PIPE)
+    encoder = select_video_encoder(a.encoder)
+    video_args = ['-c:v', encoder, '-pix_fmt', 'yuv420p']
+    video_args += (['-preset', 'medium', '-global_quality', '23'] if encoder == 'h264_qsv'
+                   else ['-preset', 'medium', '-crf', '19'])
+    pr = subprocess.Popen(['ffmpeg', '-y', '-loglevel', 'error', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-s', f'{W}x{H}', '-r', str(FPS), '-i', '-', '-i', wavp, *video_args, '-c:a', 'aac', '-b:a', '192k', '-shortest', '-movflags', '+faststart', a.out], stdin=subprocess.PIPE)
     for k in range(nf):
         pr.stdin.write(R.frame(scenes, k / FPS, a, plan['title']).tobytes())
         if k % (FPS * 10) == 0: print(f'  frame {k}/{nf}', flush=True)
