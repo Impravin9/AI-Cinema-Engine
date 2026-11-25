@@ -235,7 +235,7 @@ def fetch(i, s, a, style, used, cache):
         cached_credit = open(mp, encoding='utf-8').read()
         cache_allowed = cached_credit.startswith('LOCAL USER ASSET |')
         if cached_credit.startswith(('Wikimedia Commons |', 'Openverse |')):
-            match = re.search(r'licence:\\s*([^|]+)', cached_credit, re.IGNORECASE)
+            match = re.search(r'licence:\s*([^|]+)', cached_credit, re.IGNORECASE)
             cache_allowed = bool(match and lic_ok(match.group(1).strip()))
         if cached_credit.startswith('designed card |'):
             cache_allowed = bool(a.allow_cards)
