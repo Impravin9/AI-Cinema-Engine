@@ -101,7 +101,9 @@ def sanitize_plan(plan: dict[str, Any], source_script: str | None = None) -> dic
             if not name:
                 continue
             if name.casefold() in allowed or _mentioned(name, source) or _is_group(name, None):
-                actor["action"] = _scene_action(text, str(actor.get("role") or ""))
+                current_action = str(actor.get("action") or "auto").lower()
+                if current_action in {"", "auto"}:
+                    actor["action"] = _scene_action(text, str(actor.get("role") or ""))
                 actors.append(actor)
         scene["actors"] = actors[:3]
     return plan
