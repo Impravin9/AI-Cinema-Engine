@@ -49,12 +49,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--content-style", choices=("history", "mythology", "news", "science", "animals", "story"),
                         help="Subject category for realistic mode (not the renderer selector).")
     parser.add_argument("--source", choices=("auto", "photo", "gen"), default="auto",
-                        help="Visual source strategy in realistic mode.")
+                        help="Compatibility setting; realistic still images come only from free, licence-filtered sources.")
     parser.add_argument("--media", default="media", help="Folder containing numbered local scene images.")
-    parser.add_argument("--video-dir", default="media/videos", help="Folder containing optional generated scene clips (scene_001.mp4, etc.).")
-    parser.add_argument("--generate-video", action="store_true", help="Generate moving clips with paid Replicate LTX 2.3 Fast.")
-    parser.add_argument("--video-max-scenes", type=int, default=5, help="Maximum AI-generated clips per run; 0 means all scenes.")
-    parser.add_argument("--video-duration", type=int, choices=(6, 8, 10, 12, 14, 16, 18, 20), default=6, help="Duration of each generated clip in seconds.")
+    parser.add_argument("--video-dir", default="media/videos", help="Folder containing your own licensed moving clips (scene_001.mp4, etc.).")
     parser.add_argument("--music", default="music", help="Folder containing royalty-free music tracks.")
     parser.add_argument("--cache", default="cache", help="Visual/audio cache directory.")
     parser.add_argument("--tts-voice", default="en-US-AndrewMultilingualNeural",
@@ -131,8 +128,6 @@ def build_renderer_args(args: argparse.Namespace) -> tuple[str, list[str]]:
     if args.prompt_only:
         command.append("--prompt-only")
     command += ["--source", args.source, "--media", args.media, "--video-dir", args.video_dir, "--music", args.music, "--cache", args.cache]
-    if args.generate_video:
-        command += ["--generate-video", "--video-max-scenes", str(args.video_max_scenes), "--video-duration", str(args.video_duration)]
     command += ["--voice", args.tts_voice, "--rate", args.rate, "--musicvol", str(args.musicvol)]
     if args.content_style:
         command += ["--style", args.content_style]
