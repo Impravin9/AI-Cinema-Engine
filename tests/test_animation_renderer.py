@@ -28,9 +28,9 @@ class AnimationRendererTests(unittest.TestCase):
         compile(BLENDER_SOURCE, "<blender_scene>", "exec")
 
     def test_character_uses_joint_pivots_and_real_gait(self):
-        self.assertIn("hip_L", BLENDER_SOURCE)
-        self.assertIn("elbow_L", BLENDER_SOURCE)
-        self.assertIn("knee_L", BLENDER_SOURCE)
+        self.assertIn('joint("hip_"+label', BLENDER_SOURCE)
+        self.assertIn('joint("elbow_"+label', BLENDER_SOURCE)
+        self.assertIn('joint("knee_"+label', BLENDER_SOURCE)
         self.assertIn("cycles * 2", BLENDER_SOURCE)
         self.assertNotIn("CHARACTER_ROOT", BLENDER_SOURCE)
 
