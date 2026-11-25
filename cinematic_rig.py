@@ -179,10 +179,16 @@ for idx, scn in enumerate(scenes):
         lean = {"fear": 9, "sadness": 7, "anger": -8, "curiosity": -4}.get(mood, 0)
         root.rotation_euler[1] = math.radians(lean)
         root.keyframe_insert("rotation_euler", frame=start)
-        root.rotation_euler[1] = math.radians(-lean * .35)
-        root.keyframe_insert("rotation_euler", frame=start + max(1, duration//3))
-        root.rotation_euler[1] = math.radians(lean * .25)
-        root.keyframe_insert("rotation_euler", frame=end)
+        if action == "fall":
+            root.rotation_euler[0] = 0
+            root.keyframe_insert("rotation_euler", frame=start)
+            root.rotation_euler[0] = math.radians(76)
+            root.keyframe_insert("rotation_euler", frame=end)
+        else:
+            root.rotation_euler[1] = math.radians(-lean * .35)
+            root.keyframe_insert("rotation_euler", frame=start + max(1, duration//3))
+            root.rotation_euler[1] = math.radians(lean * .25)
+            root.keyframe_insert("rotation_euler", frame=end)
         for shoulder, elbow, side in arm_rigs:
             if action == "speak":
                 shoulder.rotation_euler[1] = math.radians(-24 if side < 0 else -12)
@@ -193,6 +199,9 @@ for idx, scn in enumerate(scenes):
             elif mood == "anger":
                 shoulder.rotation_euler[1] = math.radians(14)
                 elbow.rotation_euler[1] = math.radians(-12)
+            elif action == "fall":
+                shoulder.rotation_euler[1] = math.radians(-38 if side < 0 else 38)
+                elbow.rotation_euler[1] = math.radians(-24)
             shoulder.keyframe_insert("rotation_euler", frame=start)
             elbow.keyframe_insert("rotation_euler", frame=start)
             shoulder.keyframe_insert("rotation_euler", frame=end)
@@ -213,6 +222,8 @@ for idx, scn in enumerate(scenes):
     }
     base, lens, target = profiles.get(shot, profiles["medium"])
     cam.data.lens = lens
+    cam.data.keyframe_insert(data_path="lens", frame=start)
+    cam.data.keyframe_insert(data_path="lens", frame=end)
     base_v = Vector(base)
     target_v = Vector(target)
     move = str(scn.get("camera_move", "slow_pan"))
