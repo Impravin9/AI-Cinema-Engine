@@ -60,6 +60,22 @@ floor_mat=mat("matte stage",(.035,.055,.07))
 bpy.ops.mesh.primitive_plane_add(size=200, location=(0,0,-.08)); bpy.context.object.data.materials.append(floor_mat)
 for x in (-5,-3,3,5):
  bpy.ops.mesh.primitive_cube_add(size=1, location=(x,2,1.1)); o=bpy.context.object; o.scale=(1.1,.6,1.2+(abs(x)%2)*.5); o.data.materials.append(mat("architectural shadow "+str(x),(.045+.01*abs(x),.07,.09)))
+# Reusable lightweight environment kits. Visibility is switched per directed scene.
+wood=mat("environment wood",(.19,.095,.045)); leaves=mat("forest foliage",(.055,.19,.075)); wall=mat("village plaster",(.48,.32,.19)); roof=mat("thatch roof",(.16,.075,.035)); smoke_mat=mat("smoke grey",(.34,.36,.37))
+environment_objects={"forest":[],"village":[],"battlefield":[],"water":[],"mountain":[]}
+for i,x in enumerate((-4.2,-2.8,2.8,4.2)):
+ trunk=cyl("forest tree trunk",(x,1.2,0),(x,1.2,1.45),.13,wood); environment_objects["forest"].append(trunk)
+ crown=uv("forest canopy",(x,1.2,1.85),(.72,.62,.88),leaves); environment_objects["forest"].append(crown)
+for i,x in enumerate((-3.4,0,3.4)):
+ bpy.ops.mesh.primitive_cube_add(size=1,location=(x,2.1,.72)); hut=bpy.context.object; hut.name="village hut"; hut.scale=(1.25,1.0,.9); hut.data.materials.append(wall); environment_objects["village"].append(hut)
+ bpy.ops.mesh.primitive_cone_add(vertices=4,radius1=1.05,radius2=0,depth=1.0,location=(x,2.1,1.65),rotation=(0,0,math.radians(45))); thatch=bpy.context.object; thatch.name="village thatch roof"; thatch.data.materials.append(roof); environment_objects["village"].append(thatch)
+for x in (-3.2,0,3.2):
+ bpy.ops.mesh.primitive_cube_add(size=1,location=(x,1.8,.35)); barricade=bpy.context.object; barricade.name="battlefield debris"; barricade.scale=(1.1,.35,.45); barricade.rotation_euler[1]=math.radians(12); barricade.data.materials.append(wood); environment_objects["battlefield"].append(barricade)
+bpy.ops.mesh.primitive_plane_add(size=30,location=(0,1,-.015)); water=bpy.context.object; water.name="water environment"; water.data.materials.append(mat("water surface",(.025,.12,.19),.15,.22)); environment_objects["water"].append(water)
+for x in (-4,0,4):
+ bpy.ops.mesh.primitive_cone_add(vertices=8,radius1=2.2,radius2=0,depth=4,location=(x,3,1.9)); peak=bpy.context.object; peak.name="distant mountain"; peak.data.materials.append(mat("mountain stone",(.12,.15,.17))); environment_objects["mountain"].append(peak)
+for i in range(4):
+ cloud=uv("forest smoke",(2.0+i*.13,1.1,1.1+i*.34),(.38+i*.08,.32+i*.08,.45+i*.09),smoke_mat); environment_objects["forest"].append(cloud)
 # Character assembled as separate expressive parts; keyframes animate posture, gaze and gestures.
 root=bpy.data.objects.new("CHARACTER_ROOT",None); s.collection.objects.link(root)
 def part(o):
@@ -104,6 +120,12 @@ frame=1
 for idx,scn in enumerate(scenes):
  text=str(scn.get("text","")); low=text.lower()
  start=frame; end=frame+max(1,int(seconds*fps))-1
+ env=str(scn.get("environment","landscape"))
+ for env_name, env_objects in environment_objects.items():
+  for env_obj in env_objects:
+   env_obj.hide_render=(env_name != env)
+   env_obj.keyframe_insert(data_path="hide_render",frame=start)
+   env_obj.keyframe_insert(data_path="hide_render",frame=end)
  caption.data.body=text[:105]
  # Motivate character travel and acting from the director's scene metadata.
  action=str(scn.get('action','observe')); mood=str(scn.get('mood','determined'))
