@@ -5,13 +5,14 @@ import argparse, json, os, shutil, subprocess, sys, tempfile, re
 from pathlib import Path
 
 from cinematic_director import direct_plan
+from cinematic_environment import upgrade_environment_source
 from cinematic_rig import upgrade_blender_source
 
 def split_script(text):
     parts = [x.strip() for x in re.split(r'(?<=[.!?])\s+', text) if x.strip()]
     if not parts:
         parts = [text.strip()]
-    return [{"text": p, "visual": "cinematic_character", "mood": "determined"} for p in parts]
+    return [{"text": p, "visual": "cinematic_character"} for p in parts]
 
 BLENDER_SOURCE = r'''
 import bpy, sys, json, math, os
@@ -181,6 +182,7 @@ bpy.ops.wm.save_as_mainfile(filepath=output+".blend")
 bpy.ops.render.render(animation=True)
 '''
 
+BLENDER_SOURCE = upgrade_environment_source(BLENDER_SOURCE)
 BLENDER_SOURCE = upgrade_blender_source(BLENDER_SOURCE)
 
 
