@@ -8,8 +8,9 @@ Same folder as lego_boost.py, lego_ai.py, lego_director.py, lego_engine_v2.py (r
   python lego_modern.py script.txt out.mp4 --plan modern_plan.json     # (your old plan.json also works)
   flags: --voice en-US-AndrewMultilingualNeural|en-US-AriaNeural|en-GB-RyanNeural|en-IN-PrabhatNeural  --rate +0%  --pitch -2Hz
          --source auto|photo|gen   --media media/  --music music/   --preview (640x360 12fps)   --silent   --endcard   --style history|mythology|news|science|animals|story
-Visual sources per scene (auto): your own file media/<n>.jpg|png (n = scene number 1,2,..)  ->  Wikimedia Commons (free licences, credited)  ->  Pexels (PEXELS_API_KEY)
-  ->  Gemini image (GEMINI_API_KEY)  ->  Pollinations (free AI)  ->  designed text card (never crashes).  Mythology/fantasy scenes try AI first.
+Visual sources per scene: your own numbered media/<n>.jpg|png -> Wikimedia Commons -> Openverse.
+Only Public Domain/PDM, CC0 and CC BY assets are accepted; attribution is saved.
+No paid image/video generation APIs are called by this renderer.
 Music: drop royalty-free mp3/wav into music/ named epic_*.mp3 tense_*.mp3 sad_*.mp3 calm_*.mp3 up_*.mp3 (else a built-in cinematic score is synthesised).
 Output: out.mp4 + out_credits.txt (paste in YouTube description: licence attribution) + out_pack.txt (title, chapters).
 """
@@ -141,7 +142,7 @@ def http(url, hdr=None, timeout=25, tries=3, retry429=True):
     raise last
 def net_check():
     try: http('https://commons.wikimedia.org/w/api.php?action=query&meta=siteinfo&format=json', timeout=15, tries=1); print('network: Wikimedia OK', flush=True)
-    except Exception as e: Net.off.add('commons'); print(f'network: Wikimedia unreachable -> {why(e)}\n  continuing with local media/ + AI images + designed cards (nothing will crash)', flush=True)
+    except Exception as e: Net.off.add('commons'); print(f'network: Wikimedia unreachable -> {why(e)}\n  Openverse and user-supplied local assets remain available as fallback', flush=True)
 def strip_html(s): return re.sub(r'<[^>]+>', '', s or '').strip()[:80]
 def lic_ok(license_name):
     """Allow public domain, CC0 and CC BY only; exclude NC, ND and SA."""
@@ -221,74 +222,6 @@ def src_openverse(qs, used):
             if not Net.ok('openverse'):
                 return
 
-def src_pexels(qs, used):
-    k = os.environ.get('PEXELS_API_KEY')
-    if not k: return
-    for q in qs:
-        try:
-            r = json.loads(http('https://api.pexels.com/v1/search?' + urllib.parse.urlencode(dict(query=q, orientation='landscape', per_page=6)), {'Authorization': k}))
-            for p in r.get('photos', []):
-                if p['src']['large2x'] in used: continue
-                used.add(p['src']['large2x']); return Image.open(io.BytesIO(http(p['src']['large2x']))), f"Pexels | {p['photographer']} | Pexels License | {p['url']}"
-        except Exception as e: Net.bad('pexels', e)
-def src_gemini(prompt, reference_paths=None):
-    k = os.environ.get('GEMINI_API_KEY') or os.environ.get('GOOGLE_API_KEY')
-    if not k: return
-    try:
-        parts = [dict(text=prompt + ' Wide 16:9 cinematic frame, no text, no watermark.')]
-        for ref_path in (reference_paths or [])[:3]:
-            if os.path.isfile(ref_path):
-                with open(ref_path, 'rb') as ref_file:
-                    parts.append(dict(inline_data=dict(mime_type='image/jpeg', data=base64.b64encode(ref_file.read()).decode('ascii'))))
-        m = os.environ.get('GEMINI_IMAGE_MODEL', 'gemini-2.5-flash-image'); body = json.dumps(dict(contents=[dict(parts=parts)], generationConfig=dict(responseModalities=['IMAGE']))).encode()
-        rq = urllib.request.Request(f'https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent?key={k}', body, {'content-type': 'application/json'})
-        r = json.load(urllib.request.urlopen(rq, timeout=120))
-        for p in r['candidates'][0]['content']['parts']:
-            d = p.get('inlineData') or p.get('inline_data')
-            if d: return Image.open(io.BytesIO(base64.b64decode(d['data']))), 'AI generated (Gemini)'
-    except Exception as e: Net.bad('gemini', e)
-def character_reference(character, cache):
-    """Create one reusable identity portrait per named character when Gemini is configured."""
-    if not (os.environ.get('GEMINI_API_KEY') or os.environ.get('GOOGLE_API_KEY')):
-        return None
-    name = str(character.get('name') or '').strip()
-    if not name:
-        return None
-    folder = os.path.join(cache, 'characters')
-    os.makedirs(folder, exist_ok=True)
-    slug = re.sub(r'[^a-z0-9]+', '_', name.lower()).strip('_')[:48] or 'character'
-    path = os.path.join(folder, slug + '.jpg')
-    if os.path.isfile(path):
-        return path
-    role = str(character.get('role') or 'historical figure')
-    prompt = (
-        "Create a single photorealistic cinematic identity-reference portrait for visual continuity. "
-        f"Subject: {name}, role: {role}. Depict a historically appropriate appearance and period clothing. "
-        "Chest-up portrait, neutral dark background, natural soft key light, face clearly visible, "
-        "realistic human proportions, no text, no logos, no watermark, no collage. "
-        "This is a reusable visual identity reference, not a movie poster."
-    )
-    result = src_gemini(prompt)
-    if not result:
-        return None
-    result[0].convert('RGB').save(path, quality=94)
-    print(f'   -> character reference created: {name}', flush=True)
-    return path
-
-_pl = [0.0]
-def src_pollinations(prompt, seed):
-    if not Net.ok('pollinations'): return
-    hdr = {'Authorization': 'Bearer ' + os.environ['POLLINATIONS_API_KEY']} if os.environ.get('POLLINATIONS_API_KEY') else {}; gap = 1 if hdr else 16
-    url = 'https://image.pollinations.ai/prompt/' + urllib.parse.quote(prompt[:600]) + f'?width=1280&height=720&nologo=true&model=flux&seed={seed}'
-    for k in range(3):
-        w = _pl[0] + gap - time.time()
-        if w > 0: print(f'  pollinations: waiting {w:.0f}s (free tier allows 1 image / 15s)', flush=True); time.sleep(w)
-        _pl[0] = time.time()
-        try: im = Image.open(io.BytesIO(http(url, hdr, timeout=120, tries=1, retry429=False))); Net.good('pollinations'); return im, 'AI generated (Pollinations/FLUX)'
-        except urllib.error.HTTPError as e:
-            if e.code == 429: continue
-            Net.bad('pollinations', e); return
-        except Exception as e: _pl[0] = 0; Net.bad('pollinations', e); return
 def card(text, acc, W=1920, H=1080):
     im = Image.new('RGB', (W, H)); a = np.linspace(0, 1, H)[:, None, None]; arr = (np.array((14, 18, 30)) * (1 - a) + np.array(acc) * .35 * a).astype(np.uint8); im = Image.fromarray(np.repeat(arr, W, 1))
     d = ImageDraw.Draw(im); f = E.font(90); words = text.split(); lines = []; cur = ''
