@@ -17,6 +17,7 @@ import os, re, sys, io, json, math, time, base64, shutil, hashlib, argparse, sub
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter, ImageEnhance
 import lego_boost as B
+from realistic_director import prepare_plan
 A = B.A; E = B.E
 clamp = lambda v, a, b: max(a, min(b, v))
 SR = E.SR
@@ -26,18 +27,20 @@ MOODS = ('epic', 'tense', 'sad', 'up', 'calm')
 OK_LIC = ('public domain', 'pd', 'cc0', 'cc by', 'cc-by', 'attribution', 'free art', 'gfdl', 'copyrighted free use', 'no restrictions')
 
 # ================================================================ planning
-SYSTEM = """You are the editor/director of a modern YouTube documentary (real photos + cinematic edits + banners, NO cartoons). Return ONLY valid JSON, no prose/fences.
-Schema: {"title":str,"style":"history|mythology|news|science|animals|story","scenes":[{"text":str,"visual":"photo|gen","queries":[str,str,str],"gen_prompt":str,"motion":"zoom_in|zoom_out|pan_left|pan_right|push_up",
-"transition":"cut|fade|dip|whip|flash","mood":"epic|tense|sad|up|calm","banner":{"kind":"location|name|date|stat|quote|none","text":str,"sub":str},"chapter":str|null,"sfx":[str]}]}
-Rules:
-1. Scenes by meaning, 12-30 words each, "text" = the script's own words in order covering the WHOLE script (it is the narration). Aim 4-9 seconds per scene.
-2. visual "photo" for real people/places/events/objects/animals (queries: 3 progressively broader search phrases a photo archive understands, with proper nouns, place and year, e.g. "Neville Chamberlain Munich Agreement 1938", "Munich 1938 conference", "1930s European diplomats").
-   visual "gen" for mythology, legends, fantasy, abstract ideas, or anything no photo can exist of; then gen_prompt = one rich cinematic image prompt (subject, setting, lighting, lens, mood, realistic, 16:9, no text).
-   ALWAYS also give gen_prompt (used as fallback).
-3. banner: location (text=PLACE, sub=COUNTRY/DATE), name (text=PERSON, sub=role and years), date (text=1939, sub=event), stat (text=big number like 60 MILLION, sub=what it counts), quote (text=short quote, sub=speaker). Use banners on ~40% of scenes, never two in a row; kind none otherwise.
-4. chapter: short title at the start of each new section (about every 6-10 scenes), else null.
-5. Vary motion and transition; epic/tense/sad/up/calm mood drives music and colour grade; sfx from: whoosh, thud, sting, drumroll, ding, whistle.
-6. Genre-agnostic: mythology, history, animals, science, news, stories all allowed. Never invent facts not in the script."""
+SYSTEM = """You are a professional documentary film director, historical researcher and cinematographer.
+Return ONLY valid JSON, no prose or code fences.
+Schema: {"title":str,"style":"history|mythology|news|science|animals|story","scenes":[{"text":str,"visual":"photo|gen","queries":[str,str,str],"gen_prompt":str,"motion":"zoom_in|zoom_out|pan_left|pan_right|push_up","transition":"cut|fade|dip|whip|flash","mood":"epic|tense|sad|up|calm","banner":{"kind":"location|name|date|stat|quote|none","text":str,"sub":str},"chapter":str|null,"sfx":[str]}]}
+DIRECTOR RULES:
+1. Preserve every word of the supplied narration in original order across scenes. Do not summarize, omit, reorder or invent facts. Each scene covers one visual beat, usually 12-30 words and 4-9 seconds.
+2. The supplied script is the source of truth. Never introduce an unrelated celebrity, politician, athlete, fictional character or modern public figure. A person may appear only if named in the script and relevant to that exact scene. If not named, show appropriate anonymous people, vehicles, places or objects.
+3. Historical scenes must match the narrated year, country, uniforms, weapons, vehicles, architecture, flags and technology. Never insert modern clothing, modern cars, modern politicians, football players or present-day equipment into a historical scene.
+4. Direct what the camera should show, not merely what the narrator mentions. If narration describes a battle, show the battle. If it describes a letter, show the letter. If it describes a city under siege, establish the city and civilians. A mentioned person who is not physically present must not be inserted into the shot.
+5. For real historical events and existing people/places, choose visual="photo" and provide precise archive-search queries using event + person/place + year. For unphotographable events, reconstructions, concepts or mythology, use visual="gen" with a specific photorealistic reconstruction prompt.
+6. Every gen_prompt describes one coherent cinematic frame: subject, action, period, setting, composition, shot size, lens, lighting, atmosphere and realistic materials. Include no text, no watermark, no collage.
+7. Vary shot sizes: establishing wide, aerial wide, ground-level wide, medium, close-up, insert detail. Avoid repetitive Ken Burns motion. Motion must be slow and motivated.
+8. Use only script-supported dates, names, statistics and quotes in banners. No invented captions or claims. Use banners sparingly, never two consecutive scenes.
+9. Make visual narrative progress: establish geography, show action, show consequences, then transition to the next event. Avoid repeating the same image or subject in adjacent scenes.
+10. Return a complete valid plan. Never leave a scene with empty text, queries or gen_prompt."""
 STOP = set('in the and but a an on at of to for with as by from after before when while during then this that it he she they we his her its their one two three some many most each every how why what who where which if so yet nor or not no there here also only just over under into than'.split())
 def toks_caps(t):
     out = []
@@ -207,7 +210,10 @@ def card(text, acc, W=1920, H=1080):
     return im
 def fetch(i, s, a, style, used, cache):
     key = hashlib.md5((str(i) + str(s['queries']) + s['gen_prompt'] + s['visual'] + a.source).encode()).hexdigest()[:12]; cp = os.path.join(cache, key + '.jpg'); mp = cp + '.txt'
-    if os.path.exists(cp): return Image.open(cp).convert('RGB'), open(mp).read() if os.path.exists(mp) else 'cached'
+    if os.path.exists(cp):
+        cached_credit = open(mp, encoding='utf-8').read() if os.path.exists(mp) else 'cached'
+        if a.allow_cards or not cached_credit.startswith('designed card'):
+            return Image.open(cp).convert('RGB'), cached_credit
     r = src_local(i, a.media); gp = s['gen_prompt']; order = ['photo', 'gen'] if (s['visual'] == 'photo' and a.source != 'gen') or a.source == 'photo' else ['gen', 'photo']
     for kind in order:
         if r: break
@@ -400,7 +406,7 @@ def kar(text, d, speech):
 def main():
     ap = argparse.ArgumentParser(); ap.add_argument('script'); ap.add_argument('out', nargs='?', default='modern.mp4'); ap.add_argument('--plan'); ap.add_argument('--prompt-only', action='store_true'); ap.add_argument('--voice', default='en-US-AndrewMultilingualNeural'); ap.add_argument('--rate', default='+0%')
     ap.add_argument('--source', default='auto', choices=['auto', 'photo', 'gen']); ap.add_argument('--media', default='media'); ap.add_argument('--music', default='music'); ap.add_argument('--preview', action='store_true'); ap.add_argument('--silent', action='store_true'); ap.add_argument('--endcard', action='store_true')
-    ap.add_argument('--style', default=None); ap.add_argument('--provider', default='auto'); ap.add_argument('--model', default=os.environ.get('LEGO_MODEL')); ap.add_argument('--nomusic', action='store_true'); ap.add_argument('--musicvol', type=float, default=.55); ap.add_argument('--cache', default='cache'); ap.add_argument('--save-plan', default='modern_plan.json'); a = ap.parse_args()
+    ap.add_argument('--style', default=None); ap.add_argument('--provider', default='auto'); ap.add_argument('--model', default=os.environ.get('LEGO_MODEL')); ap.add_argument('--nomusic', action='store_true'); ap.add_argument('--musicvol', type=float, default=.55); ap.add_argument('--cache', default='cache'); ap.add_argument('--save-plan', default='modern_plan.json'); ap.add_argument('--allow-cards', action='store_true', help='Allow designed text cards when no visual provider succeeds.'); a = ap.parse_args()
     script = open(a.script, encoding='utf-8').read()
     if a.prompt_only: open('modern_prompt.txt', 'w', encoding='utf-8').write(SYSTEM + '\n\nSCRIPT:\n' + script); return print('Wrote modern_prompt.txt -> paste into Claude.ai, save the JSON reply as modern_plan.json, run with --plan modern_plan.json')
     if shutil.which('ffmpeg') is None: raise SystemExit('ffmpeg not in PATH (winget install ffmpeg)')
@@ -409,6 +415,7 @@ def main():
         plan = ask_plan(script, a)
         if not plan: raise SystemExit('No LLM key (ANTHROPIC_API_KEY / GEMINI_API_KEY / GROQ_API_KEY). Use --prompt-only, paste the prompt into Claude.ai and re-run with --plan modern_plan.json')
         json.dump(plan, open(a.save_plan, 'w', encoding='utf-8'), indent=1); print('plan saved', a.save_plan, flush=True)
+    plan = prepare_plan(plan, script, a.style)
     plan = adapt(plan, a.style); style = plan['style']; W, H, FPS = (640, 360, 12) if a.preview else (1280, 720, 24); os.makedirs(a.cache, exist_ok=True); net_check() if a.source != 'gen' else None; used = set(); scenes = []; credits = []
     rate = {'tense': '-4%', 'sad': '-6%', 'calm': '-2%', 'epic': '+0%', 'up': '+5%'}; tts = None if a.silent else tts_scene(a, rate); t0 = 0.0
     for i, s in enumerate(plan['scenes']):
