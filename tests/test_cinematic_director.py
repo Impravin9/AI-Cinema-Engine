@@ -32,6 +32,34 @@ class CinematicDirectorTests(unittest.TestCase):
         self.assertEqual([x["action"] for x in directed], ["walk", "run"])
         self.assertEqual([x["shot_index"] for x in directed], [0, 1])
 
+    def test_combat_is_not_misclassified_as_static_fear(self):
+        scene = direct_scene({"text": "The soldier attacks and fights the enemy."})
+        self.assertEqual(scene["action"], "fight")
+        self.assertEqual(scene["environment"], "battlefield")
+        self.assertEqual(scene["pace"], "fast")
+
+    def test_kneeling_is_not_a_fall(self):
+        scene = direct_scene({"text": "The guard kneels before the king."})
+        self.assertEqual(scene["action"], "kneel")
+
+    def test_sitting_and_pointing_get_playable_actions(self):
+        self.assertEqual(direct_scene({"text": "She sits beside the fire."})["action"], "sit")
+        self.assertEqual(direct_scene({"text": "He points toward the mountains."})["action"], "point")
+
+    def test_scene_change_gets_establishing_transition(self):
+        directed = direct_plan([
+            {"text": "He walks through the forest."},
+            {"text": "He enters the palace hall."},
+        ])
+        self.assertEqual(directed[1]["transition"], "establishing_cut")
+
+    def test_explicit_transition_is_preserved(self):
+        directed = direct_plan([
+            {"text": "Forest."},
+            {"text": "Palace.", "transition": "match_cut"},
+        ])
+        self.assertEqual(directed[1]["transition"], "match_cut")
+
 
 if __name__ == "__main__":
     unittest.main()
