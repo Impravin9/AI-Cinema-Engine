@@ -45,19 +45,20 @@ body_ellipsoid("waist tunic", root, (0,0,.98), (.31,.22,.31), shirt)
 body_ellipsoid("leather belt", root, (0,-.004,.96), (.325,.232,.065), wood)
 body_ellipsoid("belt clasp", root, (0,-.237,.96), (.055,.025,.055), gold)
 body_ellipsoid("neck", root, (0,0,1.82), (.125,.13,.18), skin)
-body_ellipsoid("head", root, (0,-.012,2.13), (.315,.275,.405), skin)
-body_ellipsoid("hair crown", root, (0,.012,2.43), (.325,.285,.19), hair)
-body_ellipsoid("rear hair", root, (0,.17,2.22), (.29,.15,.29), hair)
+head_joint = joint("head_turn", root, (0,0,1.82))
+body_ellipsoid("head", head_joint, (0,-.012,.31), (.315,.275,.405), skin)
+body_ellipsoid("hair crown", head_joint, (0,.012,.61), (.325,.285,.19), hair)
+body_ellipsoid("rear hair", head_joint, (0,.17,.40), (.29,.15,.29), hair)
 for side in (-1,1):
-    body_ellipsoid("ear", root, (side*.305,-.005,2.14), (.075,.085,.105), skin)
-    body_ellipsoid("eye socket", root, (side*.115,-.260,2.19), (.083,.033,.062), hair)
-    body_ellipsoid("eye white", root, (side*.115,-.287,2.195), (.057,.019,.039), white)
-    body_ellipsoid("iris", root, (side*.115,-.304,2.195), (.022,.012,.027), iris)
+    body_ellipsoid("ear", head_joint, (side*.305,-.005,.32), (.075,.085,.105), skin)
+    body_ellipsoid("eye socket", head_joint, (side*.115,-.260,.37), (.083,.033,.062), hair)
+    body_ellipsoid("eye white", head_joint, (side*.115,-.287,.375), (.057,.019,.039), white)
+    body_ellipsoid("iris", head_joint, (side*.115,-.304,.375), (.022,.012,.027), iris)
     brow = cyl("eyebrow", (side*.055,-.286,2.275), (side*.18,-.278,2.29), .022, hair)
-    attach(brow, root, (side*.117,-.282,2.282))
-body_ellipsoid("nose bridge", root, (0,-.285,2.12), (.043,.065,.09), skin)
-body_ellipsoid("nose tip", root, (0,-.337,2.085), (.052,.045,.042), skin)
-mouth = body_ellipsoid("mouth", root, (0,-.281,1.985), (.072,.018,.018), hair)
+    attach(brow, head_joint, (side*.117,-.282,.462))
+body_ellipsoid("nose bridge", head_joint, (0,-.285,.30), (.043,.065,.09), skin)
+body_ellipsoid("nose tip", head_joint, (0,-.337,.265), (.052,.045,.042), skin)
+mouth = body_ellipsoid("mouth", head_joint, (0,-.281,.165), (.072,.018,.018), hair)
 
 # Shoulder/arm pivots. Upper and lower arms are separate articulated segments.
 arm_rigs = []
@@ -77,8 +78,9 @@ for side, label in ((-1,"L"),(1,"R")):
     thigh = limb_segment("thigh_"+label, hip, .43, .125, pants)
     knee = joint("knee_"+label, hip, (0,0,-.43))
     shin = limb_segment("shin_"+label, knee, .39, .087, pants)
-    body_ellipsoid("boot_"+label, knee, (0,-.105,-.405), (.12,.22,.095), hair)
-    leg_rigs.append((hip,knee,side))
+    ankle = joint("ankle_"+label, knee, (0,0,-.39))
+    body_ellipsoid("boot_"+label, ankle, (0,-.105,-.02), (.12,.22,.095), hair)
+    leg_rigs.append((hip,knee,ankle,side))
 
 # A small shoulder strap and satchel give the silhouette material character.
 strap = cyl("diagonal leather strap", (-.27,-.195,1.69), (.22,-.205,1.05), .035, wood)
@@ -127,7 +129,9 @@ for idx, scn in enumerate(scenes):
     shot = str(scn.get("shot_type", "medium"))
     travel = {"walk": .95, "run": 1.65, "fall": .12}.get(action, .18)
     direction = -1 if idx % 2 else 1
-    root.rotation_euler = (0, 0, 0)
+    root.rotation_euler = (0, 0, math.radians(90 * direction) if action in ("walk", "run") else 0)
+    head_joint.rotation_euler = (0, 0, 0)
+    head_joint.keyframe_insert("rotation_euler", frame=start)
     root.location = (-travel * .5 * direction, 0, 0)
     root.keyframe_insert("location", frame=start)
     root.keyframe_insert("rotation_euler", frame=start)
@@ -138,29 +142,40 @@ for idx, scn in enumerate(scenes):
     stride = 27 if action == "run" else 17
     cycles = 2 if action == "run" else 1
     if moving:
-        for step in range(cycles * 2 + 1):
-            t = step / (cycles * 2)
+        sample_count = max(4, min(duration, max(12, duration // 2)))
+        for step in range(sample_count + 1):
+            t = step / sample_count
             f = start + int((end - start) * t)
             phase = t * cycles * 2 * math.pi
-            for hip, knee, side in leg_rigs:
+            for hip, knee, ankle, side in leg_rigs:
                 swing = math.sin(phase + (math.pi if side < 0 else 0))
-                hip.rotation_euler[0] = math.radians(stride) * swing
-                knee.rotation_euler[0] = math.radians(22 if action == "run" else 10) * max(0, math.cos(phase + (math.pi if side < 0 else 0)))
+                recovery = max(0, math.cos(phase + (math.pi if side < 0 else 0)))
+                hip.rotation_euler[1] = math.radians(stride) * swing
+                knee.rotation_euler[1] = math.radians(22 if action == "run" else 10) * recovery
+                ankle.rotation_euler[1] = math.radians(-stride * .24) * swing
                 hip.keyframe_insert("rotation_euler", frame=f)
                 knee.keyframe_insert("rotation_euler", frame=f)
+                ankle.keyframe_insert("rotation_euler", frame=f)
             for shoulder, elbow, side in arm_rigs:
                 swing = math.sin(phase + (0 if side < 0 else math.pi))
-                shoulder.rotation_euler[0] = math.radians(stride * .72) * swing
-                elbow.rotation_euler[0] = math.radians(-18 if action == "run" else -8)
+                shoulder.rotation_euler[1] = math.radians(stride * .72) * swing
+                elbow.rotation_euler[1] = math.radians(-18 if action == "run" else -8)
                 shoulder.keyframe_insert("rotation_euler", frame=f)
                 elbow.keyframe_insert("rotation_euler", frame=f)
             root.location = (-travel*.5*direction + travel*t*direction, 0,
                              (.045 if action == "run" else .018) * abs(math.sin(phase*2)))
             root.rotation_euler[1] = math.radians(-7 if action == "run" else -3)
+            root.rotation_euler[2] = math.radians(90 * direction)
             root.keyframe_insert("location", frame=f)
             root.keyframe_insert("rotation_euler", frame=f)
     else:
         # Acting beats: anticipation, reaction, and a held emotional pose.
+        head_joint.rotation_euler[2] = math.radians(22 * direction if action == "react" else 0)
+        head_joint.rotation_euler[1] = math.radians(7 if mood == "sadness" else -5 if mood == "curiosity" else 0)
+        head_joint.keyframe_insert("rotation_euler", frame=start)
+        head_joint.rotation_euler[2] *= .35
+        head_joint.keyframe_insert("rotation_euler", frame=start + max(1, duration//3))
+        head_joint.keyframe_insert("rotation_euler", frame=end)
         lean = {"fear": 9, "sadness": 7, "anger": -8, "curiosity": -4}.get(mood, 0)
         root.rotation_euler[1] = math.radians(lean)
         root.keyframe_insert("rotation_euler", frame=start)
@@ -170,14 +185,14 @@ for idx, scn in enumerate(scenes):
         root.keyframe_insert("rotation_euler", frame=end)
         for shoulder, elbow, side in arm_rigs:
             if action == "speak":
-                shoulder.rotation_euler[0] = math.radians(-24 if side < 0 else -12)
-                elbow.rotation_euler[0] = math.radians(-32)
+                shoulder.rotation_euler[1] = math.radians(-24 if side < 0 else -12)
+                elbow.rotation_euler[1] = math.radians(-32)
             elif mood == "fear":
-                shoulder.rotation_euler[0] = math.radians(-28)
-                elbow.rotation_euler[0] = math.radians(-42)
+                shoulder.rotation_euler[1] = math.radians(-28)
+                elbow.rotation_euler[1] = math.radians(-42)
             elif mood == "anger":
-                shoulder.rotation_euler[0] = math.radians(14)
-                elbow.rotation_euler[0] = math.radians(-12)
+                shoulder.rotation_euler[1] = math.radians(14)
+                elbow.rotation_euler[1] = math.radians(-12)
             shoulder.keyframe_insert("rotation_euler", frame=start)
             elbow.keyframe_insert("rotation_euler", frame=start)
             shoulder.keyframe_insert("rotation_euler", frame=end)
