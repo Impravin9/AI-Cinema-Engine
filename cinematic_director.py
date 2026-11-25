@@ -11,7 +11,9 @@ from typing import Any
 _WORD = re.compile(r"[a-z0-9']+")
 
 def _has(text: str, *terms: str) -> bool:
-    return any(term in text for term in terms)
+    """Match complete tokens; avoid false positives such as 'run' inside another word."""
+    words = set(_WORD.findall(text))
+    return any(term in words for term in terms)
 
 def direct_scene(scene: dict[str, Any], index: int = 0) -> dict[str, Any]:
     """Return a copy of a scene enriched with grounded shot/action metadata."""
@@ -19,15 +21,15 @@ def direct_scene(scene: dict[str, Any], index: int = 0) -> dict[str, Any]:
     narration = str(scene.get("text") or "")
     text = " ".join(_WORD.findall(narration.lower()))
 
-    if _has(text, "runs", "run", "running", "chases", "chase", "escapes", "escape", "rushes", "rush"):
+    if _has(text, "runs", "run", "running", "chases", "chase", "escapes", "escape", "rushes", "rush", "sprints", "sprint", "flees", "flee"):
         action, camera, shot, pace = "run", "tracking", "medium_wide", "fast"
-    elif _has(text, "walks", "walk", "walking", "approaches", "approach", "travels", "travels", "marches", "march"):
+    elif _has(text, "walks", "walk", "walking", "approaches", "approach", "travels", "travel", "marches", "march", "wanders", "wander", "enters", "enter"):
         action, camera, shot, pace = "walk", "tracking", "wide", "steady"
-    elif _has(text, "turns", "turn", "looks", "look", "notices", "notice", "sees", "see", "hears", "hear", "discovers", "discover"):
+    elif _has(text, "turns", "turn", "looks", "look", "notices", "notice", "sees", "see", "hears", "hear", "discovers", "discover", "realizes", "realise", "realises", "reacts", "react"):
         action, camera, shot, pace = "react", "push_in", "close_up", "slow"
     elif _has(text, "speaks", "speak", "says", "said", "asks", "ask", "shouts", "shout", "tells", "tell"):
         action, camera, shot, pace = "speak", "push_in", "medium_close", "steady"
-    elif _has(text, "falls", "fall", "dies", "die", "collapses", "collapse", "surrenders", "surrender"):
+    elif _has(text, "falls", "fall", "dies", "die", "collapses", "collapse", "surrenders", "surrender", "kneels", "kneel"):
         action, camera, shot, pace = "fall", "pull_back", "wide", "slow"
     else:
         action, camera, shot, pace = "observe", "slow_pan", "medium", "slow"
@@ -36,9 +38,9 @@ def direct_scene(scene: dict[str, Any], index: int = 0) -> dict[str, Any]:
         mood = "fear"
     elif _has(text, "happy", "smiles", "smile", "celebrates", "celebrate", "joy"):
         mood = "joy"
-    elif _has(text, "sad", "grief", "cries", "cry", "mourning", "loss"):
+    elif _has(text, "sad", "grief", "cries", "cry", "mourning", "loss", "weeps", "weep"):
         mood = "sadness"
-    elif _has(text, "angry", "anger", "furious", "rage"):
+    elif _has(text, "angry", "anger", "furious", "rage", "enraged", "shouts", "shout"):
         mood = "anger"
     elif _has(text, "discovers", "discover", "notices", "notice", "mystery", "strange", "smoke"):
         mood = "curiosity"
@@ -51,11 +53,11 @@ def direct_scene(scene: dict[str, Any], index: int = 0) -> dict[str, Any]:
         environment = "village"
     elif _has(text, "battle", "war", "soldier", "army", "weapon", "tank"):
         environment = "battlefield"
-    elif _has(text, "room", "house", "inside", "hall", "door"):
+    elif _has(text, "room", "house", "inside", "hall", "door", "chamber", "palace", "temple", "interior"):
         environment = "interior"
-    elif _has(text, "river", "sea", "ocean", "lake", "shore"):
+    elif _has(text, "river", "sea", "ocean", "lake", "shore", "waterfall", "coast"):
         environment = "water"
-    elif _has(text, "mountain", "hill", "cliff"):
+    elif _has(text, "mountain", "hill", "cliff", "peak", "valley"):
         environment = "mountain"
     else:
         environment = "landscape"
