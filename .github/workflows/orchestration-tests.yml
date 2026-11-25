@@ -15,6 +15,6 @@ jobs:
         with:
           python-version: "3.11"
       - name: Compile Python entry points and adapters
-        run: python -m compileall -q cinema.py lego_cinema_fixes.py lego_boost.py core tests
-      - name: Run orchestration and LEGO director adapter tests
+        run: python -m compileall -q cinema.py lego_cinema_fixes.py realistic_director.py lego_modern.py lego_boost.py core tests
+      - name: Run orchestration, LEGO and realistic director tests
         run: python -m unittest discover -s tests -v
