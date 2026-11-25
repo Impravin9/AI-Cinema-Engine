@@ -25,13 +25,13 @@ def run_engine(script_name: str, arguments: Sequence[str]) -> int:
     command = [sys.executable, str(engine), *map(str, arguments)]
     env = os.environ.copy()
     env.setdefault("PYTHONUTF8", "1")
-    print("\\n[cinema] Launching:", subprocess.list2cmdline(command), flush=True)
+    print("\n[cinema] Launching:", subprocess.list2cmdline(command), flush=True)
     print("[cinema] Working directory:", root, flush=True)
 
     try:
         completed = subprocess.run(command, cwd=root, env=env, check=False)
     except KeyboardInterrupt:
-        print("\\n[cinema] Rendering interrupted by user.", flush=True)
+        print("\n[cinema] Rendering interrupted by user.", flush=True)
         return 130
     except OSError as exc:
         raise EngineRunError(f"Could not start {script_name}: {exc}") from exc
