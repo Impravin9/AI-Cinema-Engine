@@ -38,6 +38,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--prompt-only", action="store_true",
                         help="Generate a prompt file for external LLM planning; do not render.")
     parser.add_argument("--fast", action="store_true", help="Use the LEGO renderer's faster quality setting.")
+    parser.add_argument("--silent", action="store_true", help="Disable narration in either rendering mode.")
 
     # LEGO voice options
     parser.add_argument("--tts", choices=("edge",), help="Enable Edge TTS for LEGO narration.")
@@ -76,7 +77,7 @@ def build_renderer_args(args: argparse.Namespace) -> tuple[str, list[str]]:
     output.parent.mkdir(parents=True, exist_ok=True)
 
     if args.style == "lego":
-        renderer = "lego_ai.py"
+        renderer = "lego_boost.py"
         command = [script, str(output)]
         if args.plan:
             require_file(args.plan, "Plan")
@@ -94,6 +95,8 @@ def build_renderer_args(args: argparse.Namespace) -> tuple[str, list[str]]:
             command += ["--tts", args.tts]
         if args.voice_name:
             command += ["--voice-name", args.voice_name]
+        if args.silent:
+            command.append("--silent")
         if args.voice_file:
             require_file(args.voice_file, "Voice file")
             command += ["--voice", str(Path(args.voice_file).expanduser().resolve())]
