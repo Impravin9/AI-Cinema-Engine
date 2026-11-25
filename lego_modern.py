@@ -512,7 +512,14 @@ def main():
     for k in range(nf):
         pr.stdin.write(R.frame(scenes, k / FPS, a, plan['title']).tobytes())
         if k % (FPS * 10) == 0: print(f'  frame {k}/{nf}', flush=True)
-    pr.stdin.close(); pr.wait(); base = a.out.rsplit('.', 1)[0]
+    try:
+        pr.stdin.close()
+    except BrokenPipeError:
+        pass
+    return_code = pr.wait()
+    if return_code != 0:
+        raise SystemExit(f"FFmpeg encoding failed with exit code {return_code}. Check the FFmpeg/Intel driver output above.")
+    base = a.out.rsplit('.', 1)[0]
     open(base + '_credits.txt', 'w', encoding='utf-8').write('VISUAL CREDITS (paste in YouTube description)\n' + '\n'.join(credits) + '\n')
     ch = [(sc['t0'], sc['chapter']) for sc in scenes if sc.get('chapter')] or [(0, plan['title'])]; mm = lambda x: f'{int(x // 60)}:{int(x % 60):02d}'
     open(base + '_pack.txt', 'w', encoding='utf-8').write(f"TITLE: {plan['title']}\n\nCHAPTERS\n0:00 Intro\n" + '\n'.join(f'{mm(t)} {c}' for t, c in ch if t > 0) + '\n')
