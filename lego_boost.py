@@ -17,6 +17,7 @@ What it fixes:
 import os, re, sys, math, json, shutil, tempfile, subprocess
 os.makedirs('/tmp', exist_ok=True)  # lego_ai/lego_director hard-code /tmp paths; on Windows this creates <drive>:\tmp
 import lego_ai as A
+import lego_cinema_fixes as CinemaFix
 D = A.D; E = A.E
 rnd, sky, clouds, birds, flag_wave, ground = D.rnd, D.sky, D.clouds, D.birds, D.flag_wave, D.ground
 sin, cos = math.sin, math.cos
@@ -228,6 +229,10 @@ EXTRA = """9. WORLD-CLASS DIRECTING. The script can be ANY genre: mythology, his
 10. VARIETY: in any 40 scenes use at least 8 different backgrounds, never the same bg 3 scenes in a row, vary time (sunrise/day/sunset/night) and weather, change camera every scene.
 11. EVERY scene needs 1-2 sfx that match the action (explosion, engine, step, wind, cheer, thud, ding, sting, drumroll...), props that are concrete objects/animals/vehicles of the era, and 'face' lists that show an emotional arc.
 12. Give historical/mythical figures a distinctive 'look' (hair, acc, skin, outfit colors) and keep it identical in every scene.
+13. STRICT CASTING: Never invent or insert any named real person, celebrity, politician, athlete, or fictional character who is not explicitly named in the supplied script. In particular, NEVER add modern public figures to historical stories. If the script does not name a person, use historically appropriate ROLE GROUPS such as "German soldier", "British soldier", "Allied soldier", "civilian", "pilot" or "commander"; do not invent a famous identity.
+14. HISTORICAL ACCURACY: Match uniforms, vehicles, weapons, flags, architecture and locations to the stated period and country. Do not use modern suits, sports kits, modern cars, football stadiums or contemporary personalities in historical war scenes.
+15. ACTION CONTINUITY: Every actor must have a purposeful action tied to the exact scene text. Use "idle" for listening, watching, waiting or standing. Use "walk"/"run" only when the text says movement occurs. Use "talk" for speech, "point" for giving orders or indicating a target, "bow" for saluting, "crouch" for taking cover, and "fall" only when someone falls. Do not make every character walk or run. Keep actors in place when they are not travelling.
+16. SCENE CAST: Include only people/groups physically present in that shot. A narrator, leader or named historical person must not appear as an on-screen actor merely because they are mentioned in narration. Use props, maps, vehicles, environments or a separate cutaway when a person is only being discussed.
 CATALOG:
 """
 A.SYSTEM = A.SYSTEM.split('CATALOG:')[0] + EXTRA + A.catalog()
@@ -235,6 +240,14 @@ A.SYSTEM = A.SYSTEM.split('CATALOG:')[0] + EXTRA + A.catalog()
 # ============================================================ MAIN
 def main():
     av = sys.argv
+    # Capture the original user script so hallucinated named characters can be rejected.
+    if len(av) > 1 and not av[1].startswith('-'):
+        try:
+            with open(av[1], encoding='utf-8-sig') as source_file:
+                CinemaFix.set_source_script(source_file.read())
+        except OSError as exc:
+            raise SystemExit(f"Cannot read input script {av[1]}: {exc}")
+    CinemaFix.install()
     if '--silent' in av: av.remove('--silent')
     elif not any(x in av for x in ('--prompt-only', '--tts', '--voice')): av += ['--tts', 'edge']
     if shutil.which('ffmpeg') is None: raise SystemExit('ffmpeg not found in PATH. Install: winget install ffmpeg  (then reopen the terminal)')
