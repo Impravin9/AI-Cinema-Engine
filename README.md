@@ -8,7 +8,7 @@ A Python-based hybrid cinema pipeline with separate LEGO and realistic documenta
 - `core/contracts.py`: shared validation/inspection for the existing LEGO and modern storyboard JSON formats.
 - `core/runner.py`: launches the preserved renderer as a subprocess, isolates its working directory and reports failures.
 - `lego_boost.py` / `lego_ai.py` / `lego_director.py` / `lego_engine_v2.py`: existing LEGO pipeline (preserved).
-- `lego_modern.py`: existing realistic photo/AI-visual documentary renderer (preserved).
+- `lego_modern.py`: realistic archive-photo documentary renderer with local cinematic editing and licence provenance.
 
 The orchestration layer deliberately delegates to the existing renderers instead of importing and patching their internal modules. This avoids the current legacy import chain leaking into the new entry point.
 
@@ -21,13 +21,7 @@ python -m pip install -r requirements-cinema.txt
 winget install Gyan.FFmpeg
 ```
 
-Set one supported LLM key if you want automatic AI planning. For example:
-
-```powershell
-$env:GEMINI_API_KEY = "YOUR_KEY"
-```
-
-Alternatively, use Ollama where supported by the selected legacy director.
+For a zero-paid-service workflow, reuse a storyboard with --plan plan.json, or run a local Ollama model for planning with --provider ollama. The renderer's image downloader does not use Gemini, Pexels, Pollinations or paid video-generation APIs.
 
 ### Realistic film mode (free-asset workflow)
 
@@ -109,8 +103,6 @@ python -m unittest discover -s tests -v
 
 ## Realistic-renderer scope and limitations
 
-The current renderer combines still-image cinematography with optional generated moving footage. LTX 2.3 Fast can generate scene clips from the director's still references; local clips can also be supplied manually. AI video generation is an opt-in paid cloud operation, not a local Intel-GPU workload. The image-first path remains the reliable fallback when video generation is not requested.
+The free pipeline is image-first: it retrieves licence-filtered archival stills and turns them into cinematic sequences with local movement, grading, transitions, narration, music and sound design. It does not currently generate photorealistic moving footage locally. User-supplied moving clips are supported when their rights are clear. A future local video model would need to be evaluated for Intel hardware before it can be added without cloud fees.
 
-Intel QSV is an optional H.264 encoding acceleration only. It does not accelerate AI image/video generation. Intel QSV is selected only after a real FFmpeg runtime probe; CPU encoding remains the fallback.
-
-Existing LEGO renderer files remain separate and are not used by realistic mode.
+Intel QSV is an optional H.264 encoding acceleration only. It does not generate images or video. Intel QSV is selected only after a real FFmpeg runtime probe; CPU encoding remains the fallback.
