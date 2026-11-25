@@ -69,7 +69,7 @@ class AnimationRendererTests(unittest.TestCase):
         scene = direct_plan([{"text": "Inside the palace, the afraid guard kneels."}])[0]
         self.assertEqual(scene["environment"], "interior")
         self.assertEqual(scene["mood"], "fear")
-        self.assertEqual(scene["action"], "fall")
+        self.assertEqual(scene["action"], "kneel")
 
     def test_director_uses_whole_words(self):
         scene = direct_plan([{"text": "The runner stood beside a runway."}])[0]
