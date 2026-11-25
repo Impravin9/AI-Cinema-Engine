@@ -201,6 +201,11 @@ def main():
     blender=a.blender or os.environ.get("BLENDER_EXE") or shutil.which("blender")
     if not blender: raise RuntimeError("Blender was not found. Install the free Blender desktop application and add blender.exe to PATH, or set BLENDER_EXE.")
     out=Path(a.out).resolve(); out.parent.mkdir(parents=True,exist_ok=True)
+    # Catch syntax errors in the embedded Blender program before launching Blender.
+    try:
+        compile(BLENDER_SOURCE, "<embedded_blender_scene>", "exec")
+    except SyntaxError as exc:
+        raise RuntimeError(f"Embedded Blender scene script has a syntax error at line {exc.lineno}: {exc.msg}") from exc
     with tempfile.TemporaryDirectory(prefix="ai_cinema_animation_") as td:
         plan_path=Path(td)/"plan.json"; py_path=Path(td)/"render_scene.py"
         plan_path.write_text(json.dumps(plan,ensure_ascii=False),encoding="utf-8"); py_path.write_text(BLENDER_SOURCE,encoding="utf-8")
