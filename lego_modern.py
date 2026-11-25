@@ -19,7 +19,7 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFilter, ImageEnhance
 import lego_boost as B
 from asset_licensing import lic_ok
-from asset_library import open_library, save_manifest, scene_asset_path, valid_scene_asset, register_scene_asset
+from asset_library import (open_library, save_manifest, scene_asset_path, valid_scene_asset, register_scene_asset, candidate_asset_path, register_scene_candidates, select_scene_candidate, load_selection_file)
 from realistic_director import prepare_plan
 A = B.A; E = B.E
 clamp = lambda v, a, b: max(a, min(b, v))
@@ -264,6 +264,36 @@ def fetch(i, s, a, style, used, cache):
     with open(mp, 'w', encoding='utf-8') as handle:
         handle.write(result[1])
     return im, result[1]
+def fetch_candidates(i, s, a, style, used, limit):
+    """Collect several distinct licence-approved candidates for one scene."""
+    local = src_local(i, a.media)
+    if local:
+        image, credit = local
+        return [{"id": "c01", "image": image.convert("RGB"),
+                 "credit_and_source": credit + " | rights: user must confirm ownership or licence"}]
+    queries = s.get("queries") or [s.get("text", "")[:100]]
+    candidates = []
+    for _ in range(max(1, min(int(limit), 8))):
+        result = src_commons(queries, used) or src_openverse(queries, used)
+        if not result:
+            break
+        image, credit = result
+        candidates.append({"id": f"c{len(candidates) + 1:02d}",
+                           "image": image.convert("RGB"),
+                           "credit_and_source": credit})
+    if not candidates and a.allow_cards:
+        candidates.append({"id": "c01",
+                           "image": card(re.sub(r"\\s+", " ", s["text"])[:90], ACC.get(style, ACC["history"])),
+                           "credit_and_source": "designed card | original local graphic"})
+    if not candidates:
+        raise RuntimeError(
+            f"No licence-approved image candidates found for scene {i + 1}: {s['text'][:100]!r}. "
+            "Add a properly licensed image to media/<scene-number> or retry later. "
+            "Paid image APIs are not used."
+        )
+    return candidates
+
+
 def locate_scene_video(index, folder):
     """Find an optional moving scene clip using a predictable 1-based filename."""
     names = (f"scene_{index + 1:03d}.mp4", f"scene_{index + 1}.mp4",
@@ -513,7 +543,7 @@ def select_video_encoder(requested):
 def main():
     ap = argparse.ArgumentParser(); ap.add_argument('script'); ap.add_argument('out', nargs='?', default='modern.mp4'); ap.add_argument('--plan'); ap.add_argument('--prompt-only', action='store_true'); ap.add_argument('--voice', default='en-US-AndrewMultilingualNeural'); ap.add_argument('--rate', default='+0%')
     ap.add_argument('--source', default='auto', choices=['auto', 'photo', 'gen'], help='Compatibility flag; downloaded stills always use free, licence-filtered sources.'); ap.add_argument('--media', default='media'); ap.add_argument('--video-dir', default='media/videos', help='Optional user-supplied moving clips: scene_001.mp4, scene_002.mp4, etc.'); ap.add_argument('--music', default='music'); ap.add_argument('--preview', action='store_true'); ap.add_argument('--silent', action='store_true'); ap.add_argument('--endcard', action='store_true')
-    ap.add_argument('--style', default=None); ap.add_argument('--provider', default='auto'); ap.add_argument('--model', default=os.environ.get('LEGO_MODEL')); ap.add_argument('--nomusic', action='store_true'); ap.add_argument('--musicvol', type=float, default=.55); ap.add_argument('--cache', default='cache'); ap.add_argument('--asset-library', default='assets', help='Persistent per-script local image library.'); ap.add_argument('--offline', action='store_true', help='Never contact image websites; require a complete local asset library.'); ap.add_argument('--prepare-assets-only', action='store_true', help='Download/cache every scene image, create a contact sheet, then stop before rendering.'); ap.add_argument('--save-plan', default='modern_plan.json'); ap.add_argument('--allow-cards', action='store_true', help='Allow designed text cards when no visual provider succeeds.'); ap.add_argument('--encoder', choices=['auto', 'libx264', 'h264_qsv'], default='auto'); ap.add_argument('--resolution', choices=['720p', '1080p'], default='1080p'); a = ap.parse_args()
+    ap.add_argument('--style', default=None); ap.add_argument('--provider', default='auto'); ap.add_argument('--model', default=os.environ.get('LEGO_MODEL')); ap.add_argument('--nomusic', action='store_true'); ap.add_argument('--musicvol', type=float, default=.55); ap.add_argument('--cache', default='cache'); ap.add_argument('--asset-library', default='assets', help='Persistent per-script local image library.'); ap.add_argument('--candidates-per-scene', type=int, default=3, help='Distinct licensed image candidates to collect per scene (1-8).'); ap.add_argument('--offline', action='store_true', help='Never contact image websites; require a complete local asset library.'); ap.add_argument('--prepare-assets-only', action='store_true', help='Download/cache every scene image, create a contact sheet, then stop before rendering.'); ap.add_argument('--save-plan', default='modern_plan.json'); ap.add_argument('--allow-cards', action='store_true', help='Allow designed text cards when no visual provider succeeds.'); ap.add_argument('--encoder', choices=['auto', 'libx264', 'h264_qsv'], default='auto'); ap.add_argument('--resolution', choices=['720p', '1080p'], default='1080p'); a = ap.parse_args()
     script = open(a.script, encoding='utf-8').read()
     if a.prompt_only: open('modern_prompt.txt', 'w', encoding='utf-8').write(SYSTEM + '\n\nSCRIPT:\n' + script); return print('Wrote modern_prompt.txt -> paste into Claude.ai, save the JSON reply as modern_plan.json, run with --plan modern_plan.json')
     if not a.prepare_assets_only and shutil.which('ffmpeg') is None: raise SystemExit('ffmpeg not in PATH (winget install ffmpeg)')
@@ -525,6 +555,9 @@ def main():
     plan = prepare_plan(plan, script, a.style)
     plan = adapt(plan, a.style); style = plan['style']; W, H, FPS = (640, 360, 12) if a.preview else ((1920, 1080, 24) if a.resolution == '1080p' else (1280, 720, 24)); os.makedirs(a.cache, exist_ok=True); used = set(); scenes = []; credits = []
     library_dir, asset_manifest = open_library(a.asset_library, a.script, script)
+    if not 1 <= a.candidates_per_scene <= 8:
+        raise SystemExit('--candidates-per-scene must be between 1 and 8')
+    selections = load_selection_file(library_dir)
     prepared_assets = {}
     if not a.offline:
         net_check()
@@ -535,41 +568,93 @@ def main():
     for asset_i, asset_scene in enumerate(plan['scenes']):
         if locate_scene_video(asset_i, a.video_dir):
             continue
+        scene_record = asset_manifest.get("scenes", {}).get(str(asset_i + 1), {})
+        existing_candidates = list(scene_record.get("candidates") or [])
+        if selections.get(str(asset_i + 1)):
+            try:
+                select_scene_candidate(library_dir, asset_manifest, asset_i, selections[str(asset_i + 1)])
+            except (ValueError, FileNotFoundError) as exc:
+                raise SystemExit(f"Invalid selection for scene {asset_i + 1}: {exc}")
+            scene_record = asset_manifest["scenes"][str(asset_i + 1)]
+            existing_candidates = list(scene_record.get("candidates") or [])
         saved = valid_scene_asset(library_dir, asset_manifest, asset_i, asset_scene)
-        if saved:
+        if saved and len(existing_candidates) >= a.candidates_per_scene:
             asset_path, record = saved
             try:
                 prepared_assets[asset_i] = (Image.open(asset_path).convert('RGB'), record.get('credit_and_source', 'Local project asset'))
-                print(f'asset {asset_i + 1}/{total_assets}: reused local library', flush=True)
+                print(f'asset {asset_i + 1}/{total_assets}: reused {len(existing_candidates)} saved candidates ({record.get("selected_candidate", "selected")})', flush=True)
                 continue
             except Exception:
                 pass
         if a.offline:
-            raise SystemExit(f'Missing scene asset {asset_i + 1}. Offline mode will not download. Add a licensed image as {scene_asset_path(library_dir, asset_i)} or run once without --offline to resume downloads.')
+            if saved:
+                asset_path, record = saved
+                prepared_assets[asset_i] = (Image.open(asset_path).convert('RGB'), record.get('credit_and_source', 'Local project asset'))
+                print(f'asset {asset_i + 1}/{total_assets}: offline reuse ({len(existing_candidates)} candidates)', flush=True)
+                continue
+            raise SystemExit(f'Missing scene asset {asset_i + 1}. Offline mode will not download. Prepare candidates first or add a licensed image.')
         try:
-            image, credit = fetch(asset_i, asset_scene, a, style, used, a.cache)
-            target = scene_asset_path(library_dir, asset_i)
-            image.convert('RGB').save(target, quality=94)
-            register_scene_asset(library_dir, asset_manifest, asset_i, asset_scene, credit)
-            prepared_assets[asset_i] = (Image.open(target).convert('RGB'), credit)
-            print(f'asset {asset_i + 1}/{total_assets}: saved locally', flush=True)
+            candidates = existing_candidates
+            start_number = len(candidates) + 1
+            fresh = fetch_candidates(asset_i, asset_scene, a, style, used, a.candidates_per_scene - len(candidates))
+            for candidate in fresh:
+                candidate_number = start_number
+                candidate["id"] = f"c{candidate_number:02d}"
+                target = candidate_asset_path(library_dir, asset_i, candidate["id"])
+                target.parent.mkdir(parents=True, exist_ok=True)
+                candidate["image"].save(target, quality=94)
+                candidate["file"] = str(target.relative_to(library_dir)).replace("\\\\", "/")
+                candidates.append({k: v for k, v in candidate.items() if k != "image"})
+                start_number += 1
+                register_scene_candidates(library_dir, asset_manifest, asset_i, asset_scene, candidates)
+            if not candidates:
+                raise RuntimeError("No candidates were saved.")
+            selected_id = selections.get(str(asset_i + 1))
+            if selected_id:
+                asset_path, record = select_scene_candidate(library_dir, asset_manifest, asset_i, selected_id)
+            else:
+                saved = valid_scene_asset(library_dir, asset_manifest, asset_i, asset_scene)
+                if not saved:
+                    raise RuntimeError("Saved candidate set has no readable selected image.")
+                asset_path, record = saved
+            prepared_assets[asset_i] = (Image.open(asset_path).convert('RGB'), record.get('credit_and_source', 'Local project asset'))
+            print(f'asset {asset_i + 1}/{total_assets}: {len(candidates)} candidates saved; selected {record.get("selected_candidate", "first")}', flush=True)
         except Exception as exc:
             save_manifest(library_dir, asset_manifest)
-            raise SystemExit(f'Asset preparation stopped at scene {asset_i + 1}/{total_assets}: {exc}\\nCompleted scene assets are saved in {library_dir}. Run the same command later to resume; completed scenes will not be downloaded again.')
-    # Contact sheet lets the creator visually review the complete asset set before editing.
+            raise SystemExit(f'Asset preparation stopped at scene {asset_i + 1}/{total_assets}: {exc}\\nCompleted candidates are saved in {library_dir}. Run the same command later to resume; existing candidates are retained.')
+    # One comparison sheet shows every candidate, its ID, and the current selection.
     thumbs = []
-    for asset_i, (asset_image, _) in prepared_assets.items():
-        thumb = asset_image.copy(); thumb.thumbnail((320, 180))
-        tile = Image.new('RGB', (340, 220), (24, 28, 38)); tile.paste(thumb, ((340-thumb.width)//2, 8))
-        ImageDraw.Draw(tile).text((12, 192), f'SCENE {asset_i + 1:03d}', fill=(245,245,245))
-        thumbs.append(tile)
+    selection_template = {}
+    for asset_i in range(total_assets):
+        record = asset_manifest.get("scenes", {}).get(str(asset_i + 1), {})
+        candidates = record.get("candidates") or []
+        selected_id = str(record.get("selected_candidate") or (candidates[0].get("id") if candidates else ""))
+        if selected_id:
+            selection_template[str(asset_i + 1)] = selected_id
+        for candidate in candidates:
+            candidate_path = library_dir / str(candidate.get("file", ""))
+            if not candidate_path.is_file():
+                continue
+            thumb = Image.open(candidate_path).convert("RGB")
+            thumb.thumbnail((320, 180))
+            tile = Image.new('RGB', (340, 220), (24, 28, 38))
+            tile.paste(thumb, ((340-thumb.width)//2, 8))
+            label = f'SCENE {asset_i + 1:03d}  {candidate.get("id", "?")}'
+            if str(candidate.get("id")) == selected_id:
+                label += '  [SELECTED]'
+            ImageDraw.Draw(tile).text((12, 192), label, fill=(245,245,245))
+            thumbs.append(tile)
     if thumbs:
         cols = 3; rows = (len(thumbs) + cols - 1) // cols
         sheet = Image.new('RGB', (cols * 340, rows * 220), (12, 14, 20))
-        for tile_i, tile in enumerate(thumbs): sheet.paste(tile, ((tile_i % cols) * 340, (tile_i // cols) * 220))
+        for tile_i, tile in enumerate(thumbs):
+            sheet.paste(tile, ((tile_i % cols) * 340, (tile_i // cols) * 220))
         sheet.save(library_dir / 'contact_sheet.jpg', quality=88)
+    template_path = library_dir / 'asset_selections.example.json'
+    if not template_path.exists():
+        template_path.write_text(json.dumps(selection_template, indent=2), encoding='utf-8')
     if a.prepare_assets_only:
-        print(f'ASSETS READY/RESUMABLE: {library_dir}\\nReview contact_sheet.jpg, replace scene_NNN.jpg with your selected licensed images if needed, then render with --offline.')
+        print(f'ASSETS READY/RESUMABLE: {library_dir}\\nReview contact_sheet.jpg. Copy asset_selections.example.json to asset_selections.json and change scene values to candidate IDs (for example c02), then rerun with --offline.')
         return
     rate = {'tense': '-4%', 'sad': '-6%', 'calm': '-2%', 'epic': '+0%', 'up': '+5%'}; tts = None if a.silent else tts_scene(a, rate); t0 = 0.0
     for i, s in enumerate(plan['scenes']):
