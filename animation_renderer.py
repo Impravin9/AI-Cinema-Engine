@@ -81,7 +81,7 @@ for x in (-4,0,4):
 for i in range(4):
  cloud=uv("forest smoke",(2.0+i*.13,1.1,1.1+i*.34),(.38+i*.08,.32+i*.08,.45+i*.09),smoke_mat); environment_objects["smoke"].append(cloud)
 # Character assembled as separate expressive parts; keyframes animate posture, gaze and gestures.
-root=bpy.data.objects.new("CHARACTER_ROOT",None); s.collection.objects.link(root)
+root=bpy.data.objects.new("LEGACY_TEMPLATE_ROOT",None); s.collection.objects.link(root)
 def part(o):
  o.parent=root; return o
 torso=part(uv("torso",(0,0,1.22),(.39,.24,.57),shirt))
