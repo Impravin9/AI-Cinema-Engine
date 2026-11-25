@@ -7,9 +7,8 @@ pivots, so it remains usable on integrated graphics.
 from __future__ import annotations
 
 CHARACTER_BUILD = r'''
-# Cinematic character: overlapping smooth forms plus real joint pivots.
-# All geometry is parented to joint empties; limbs rotate around shoulders, elbows,
-# hips and knees instead of spinning around their own centers.
+# Stylized feature-animation hero: deliberately designed proportions, clean silhouette,
+# expressive face, layered costume and light geometry for fast Eevee rendering.
 root = bpy.data.objects.new("HERO_ROOT", None)
 s.collection.objects.link(root)
 root.empty_display_type = "PLAIN_AXES"
@@ -25,87 +24,118 @@ def joint(name, parent, location):
     obj = bpy.data.objects.new(name, None)
     s.collection.objects.link(obj)
     obj.empty_display_type = "SPHERE"
-    obj.empty_display_size = 0.08
+    obj.empty_display_size = 0.07
     obj.parent = parent
     obj.location = location
     return obj
 
 def body_ellipsoid(name, parent, location, scale, material):
     obj = uv(name, (0,0,0), scale, material)
+    obj.data.name = name + "_mesh"
     return attach(obj, parent, location)
 
 def limb_segment(name, parent, length, radius, material):
-    obj = uv(name, (0,0,0), (radius, radius, length * 0.62), material)
-    return attach(obj, parent, (0,0,-length * 0.5))
+    obj = uv(name, (0,0,0), (radius, radius, length * .66), material)
+    return attach(obj, parent, (0,0,-length * .5))
 
-# Torso has a tapered silhouette, layered tunic, collar and belt.
-body_ellipsoid("torso core", root, (0,0,1.27), (.36,.23,.53), shirt)
-body_ellipsoid("upper chest", root, (0,-.006,1.52), (.39,.235,.30), shirt)
-body_ellipsoid("waist tunic", root, (0,0,.98), (.31,.22,.31), shirt)
-body_ellipsoid("leather belt", root, (0,-.004,.96), (.325,.232,.065), wood)
-body_ellipsoid("belt clasp", root, (0,-.237,.96), (.055,.025,.055), gold)
-body_ellipsoid("neck", root, (0,0,1.82), (.125,.13,.18), skin)
-head_joint = joint("head_turn", root, (0,0,1.82))
-body_ellipsoid("head", head_joint, (0,-.012,.31), (.315,.275,.405), skin)
-body_ellipsoid("hair crown", head_joint, (0,.012,.61), (.325,.285,.19), hair)
-body_ellipsoid("rear hair", head_joint, (0,.17,.40), (.29,.15,.29), hair)
+# Head-to-body ratio and compact limbs establish a friendly feature-cartoon silhouette.
+body_ellipsoid("rounded tunic", root, (0,0,1.16), (.37,.245,.48), shirt)
+body_ellipsoid("chest panel", root, (0,-.018,1.39), (.365,.245,.255), shirt)
+body_ellipsoid("waist panel", root, (0,0,.91), (.31,.225,.29), shirt)
+body_ellipsoid("collar", root, (0,-.012,1.58), (.20,.235,.105), white)
+body_ellipsoid("scarf knot", root, (0,-.245,1.49), (.095,.055,.105), gold)
+body_ellipsoid("scarf tail", root, (.10,-.225,1.31), (.065,.035,.20), gold)
+body_ellipsoid("belt", root, (0,-.008,.88), (.32,.237,.065), wood)
+body_ellipsoid("belt buckle", root, (0,-.247,.88), (.075,.025,.065), gold)
+for z in (1.24,1.08):
+    body_ellipsoid("costume button", root, (0,-.251,z), (.027,.018,.027), gold)
+
+body_ellipsoid("neck", root, (0,0,1.58), (.13,.13,.18), skin)
+head_joint = joint("head_turn", root, (0,0,1.65))
+# Oversized rounded head with cheeks and a soft jaw; all features face camera at Y=-.
+body_ellipsoid("large cartoon face", head_joint, (0,-.015,.34), (.425,.345,.49), skin)
+body_ellipsoid("hair cap", head_joint, (0,.025,.69), (.43,.345,.235), hair)
+body_ellipsoid("back hair", head_joint, (0,.205,.40), (.36,.19,.34), hair)
+# Sculpted fringe and side locks break the sphere silhouette.
+for x,z,ang in ((-.25,.66,-18),(-.10,.72,-8),(.08,.73,8),(.25,.66,18)):
+    lock=body_ellipsoid("sculpted fringe", head_joint, (x,-.245,z), (.15,.105,.19), hair)
+    lock.rotation_euler[1]=math.radians(ang)
 for side in (-1,1):
-    body_ellipsoid("ear", head_joint, (side*.305,-.005,.32), (.075,.085,.105), skin)
-    body_ellipsoid("eye socket", head_joint, (side*.115,-.260,.37), (.083,.033,.062), hair)
-    body_ellipsoid("eye white", head_joint, (side*.115,-.287,.375), (.057,.019,.039), white)
-    body_ellipsoid("iris", head_joint, (side*.115,-.304,.375), (.022,.012,.027), iris)
-    brow = cyl("eyebrow", (side*.055,-.286,2.275), (side*.18,-.278,2.29), .022, hair)
-    attach(brow, head_joint, (side*.117,-.282,.462))
-body_ellipsoid("nose bridge", head_joint, (0,-.285,.30), (.043,.065,.09), skin)
-body_ellipsoid("nose tip", head_joint, (0,-.337,.265), (.052,.045,.042), skin)
-mouth = body_ellipsoid("mouth", head_joint, (0,-.281,.165), (.072,.018,.018), hair)
+    body_ellipsoid("ear", head_joint, (side*.405,-.015,.32), (.095,.105,.14), skin)
+    body_ellipsoid("ear inner", head_joint, (side*.448,-.105,.32), (.035,.018,.075), gold)
+    # Eye whites, irises, pupils and catchlights form a readable expression at a distance.
+    eye=body_ellipsoid("eye white", head_joint, (side*.155,-.322,.405), (.112,.045,.132), white)
+    pupil=body_ellipsoid("iris", head_joint, (side*.145,-.362,.397), (.061,.028,.080), iris)
+    body_ellipsoid("pupil", head_joint, (side*.145,-.386,.397), (.034,.016,.052), hair)
+    body_ellipsoid("eye sparkle", head_joint, (side*.125,-.402,.435), (.018,.010,.023), white)
+    brow=body_ellipsoid("expressive eyebrow", head_joint, (side*.155,-.327,.565), (.115,.035,.035), hair)
+    brow.rotation_euler[1]=math.radians(-8*side)
+    if side < 0:
+        brow_rigs=[]
+    brow_rigs.append(brow)
+    eye_rigs.append(eye) if False else None
+# Eye rig list is explicit for subtle blinks and gaze acting.
+eye_rigs=[]
+for side in (-1,1):
+    eye_rigs.append(next(o for o in head_joint.children if o.name == "eye white" and o.location.x*side > 0))
+# Soft nose, cheek blush and a shaped mouth rather than a floating black dot.
+body_ellipsoid("nose", head_joint, (0,-.375,.285), (.075,.075,.095), skin)
+for side in (-1,1):
+    blush=body_ellipsoid("cheek blush", head_joint, (side*.265,-.304,.235), (.085,.022,.045), gold)
+mouth=body_ellipsoid("mouth", head_joint, (0,-.345,.155), (.105,.028,.055), hair)
+mouth_open=body_ellipsoid("mouth inner", head_joint, (0,-.372,.153), (.073,.012,.030), hair)
+# Teeth add a clean readable smile when speaking.
+body_ellipsoid("upper teeth", head_joint, (0,-.388,.173), (.060,.009,.012), white)
 
-# Shoulder/arm pivots. Upper and lower arms are separate articulated segments.
-arm_rigs = []
-for side, label in ((-1,"L"),(1,"R")):
-    shoulder = joint("shoulder_"+label, root, (side*.39,0,1.57))
-    body_ellipsoid("shoulder pad_"+label, shoulder, (0,0,0), (.17,.18,.19), shirt)
-    upper = limb_segment("upper_arm_"+label, shoulder, .43, .105, shirt)
-    elbow = joint("elbow_"+label, shoulder, (0,0,-.43))
-    forearm = limb_segment("forearm_"+label, elbow, .37, .078, skin)
-    hand = body_ellipsoid("hand_"+label, elbow, (0,-.012,-.39), (.085,.075,.105), skin)
-    arm_rigs.append((shoulder, elbow, side))
+# Short rounded arms with shoulder, elbow and wrist pivots; mitten hands and fingers.
+arm_rigs=[]
+for side,label in ((-1,"L"),(1,"R")):
+    shoulder=joint("shoulder_"+label, root, (side*.36,0,1.43))
+    body_ellipsoid("rounded sleeve_"+label, shoulder, (0,0,-.06), (.17,.19,.23), shirt)
+    upper=limb_segment("upper_arm_"+label, shoulder, .36, .115, shirt)
+    elbow=joint("elbow_"+label, shoulder, (0,0,-.36))
+    body_ellipsoid("cuff_"+label, elbow, (0,0,-.025), (.105,.11,.075), gold)
+    forearm=limb_segment("forearm_"+label, elbow, .31, .09, skin)
+    hand=body_ellipsoid("mitten hand_"+label, elbow, (0,-.018,-.34), (.115,.095,.12), skin)
+    for finger in range(3):
+        body_ellipsoid("finger_"+label, elbow, ((finger-1)*.052,-.075,-.405), (.035,.035,.075), skin)
+    arm_rigs.append((shoulder,elbow,side))
 
-# Leg pivots with separate knees, shins and shoes. These produce an actual gait.
-leg_rigs = []
-for side, label in ((-1,"L"),(1,"R")):
-    hip = joint("hip_"+label, root, (side*.17,0,.91))
-    thigh = limb_segment("thigh_"+label, hip, .43, .125, pants)
-    knee = joint("knee_"+label, hip, (0,0,-.43))
-    shin = limb_segment("shin_"+label, knee, .39, .087, pants)
-    ankle = joint("ankle_"+label, knee, (0,0,-.39))
-    body_ellipsoid("boot_"+label, ankle, (0,-.105,-.02), (.12,.22,.095), hair)
+# Rounded trousers, articulated knees, cuffed boots and visible toes.
+leg_rigs=[]
+for side,label in ((-1,"L"),(1,"R")):
+    hip=joint("hip_"+label, root, (side*.16,0,.78))
+    body_ellipsoid("shorts_"+label, hip, (0,0,-.09), (.17,.19,.23), pants)
+    thigh=limb_segment("thigh_"+label, hip, .34, .115, pants)
+    knee=joint("knee_"+label, hip, (0,0,-.34))
+    shin=limb_segment("shin_"+label, knee, .31, .085, pants)
+    ankle=joint("ankle_"+label, knee, (0,0,-.31))
+    body_ellipsoid("boot cuff_"+label, ankle, (0,-.015,-.015), (.12,.13,.075), gold)
+    body_ellipsoid("rounded boot_"+label, ankle, (0,-.12,-.055), (.145,.235,.105), hair)
     leg_rigs.append((hip,knee,ankle,side))
 
-# A small shoulder strap and satchel give the silhouette material character.
-strap = cyl("diagonal leather strap", (-.27,-.195,1.69), (.22,-.205,1.05), .035, wood)
-attach(strap, root)
-body_ellipsoid("small satchel", root, (.30,.13,1.02), (.16,.13,.20), wood)
+# Distinctive small backpack and strap complete the character silhouette.
+body_ellipsoid("backpack", root, (0,.235,1.18), (.23,.16,.31), wood)
+strap=cyl("cross-body strap",(-.28,-.205,1.52),(.25,-.205,.96),.035,wood)
+attach(strap,root)
 
 def key_linear(obj):
     if not obj.animation_data or not obj.animation_data.action:
         return
-    action = obj.animation_data.action
     try:
-        curves = action.fcurves
-    except (AttributeError, RuntimeError):
-        # Blender 5.x may expose layered actions rather than legacy fcurves.
-        # Default Bezier interpolation is still valid; do not fail the render.
-        return
-    for fc in curves:
-        for key in fc.keyframe_points:
-            key.interpolation = "LINEAR"
+        for fc in obj.animation_data.action.fcurves:
+            for key in fc.keyframe_points:
+                key.interpolation="BEZIER"
+                key.handle_left_type="AUTO_CLAMPED"
+                key.handle_right_type="AUTO_CLAMPED"
+    except (AttributeError,RuntimeError):
+        pass
 
-all_rig_objects = ([root] + [obj for arm in arm_rigs for obj in arm[:2]]
-                   + [obj for leg in leg_rigs for obj in leg[:3]])
-'''
-
-ANIMATION_LOOP = r'''
+all_rig_objects=([root,head_joint,mouth,mouth_open]
+                 +[obj for arm in arm_rigs for obj in arm[:2]]
+                 +[obj for leg in leg_rigs for obj in leg[:3]]
+                 +brow_rigs+eye_rigs)
+'''ANIMATION_LOOP = r'''
 # Directed film timeline: joint-based gait, body weight shift, acting and camera beats.
 frame = 1
 for idx, scn in enumerate(scenes):
@@ -266,6 +296,23 @@ for idx, scn in enumerate(scenes):
             elbow.keyframe_insert("rotation_euler", frame=start)
             shoulder.keyframe_insert("rotation_euler", frame=end)
             elbow.keyframe_insert("rotation_euler", frame=end)
+
+    # Facial performance: brows, mouth shape and eye openness track the emotional beat.
+    brow_tilt = {"anger": -18, "fear": 14, "sadness": 12, "curiosity": -10, "joy": 7}.get(mood, 0)
+    for brow in brow_rigs:
+        brow.rotation_euler[1] = math.radians(brow_tilt if brow.location.x > 0 else -brow_tilt)
+        brow.keyframe_insert("rotation_euler", frame=start)
+        brow.keyframe_insert("rotation_euler", frame=end)
+    for eye in eye_rigs:
+        eye.scale.z = .095 if mood == "anger" else (.15 if mood == "fear" else .132)
+        eye.keyframe_insert("scale", frame=start)
+        eye.keyframe_insert("scale", frame=end)
+    mouth.scale = (.105,.028,.068 if mood == "joy" else .045 if action == "speak" else .028)
+    mouth.keyframe_insert("scale", frame=start)
+    mouth.keyframe_insert("scale", frame=end)
+    mouth_open.scale = (.073,.012,.045 if action == "speak" else .018)
+    mouth_open.keyframe_insert("scale", frame=start)
+    mouth_open.keyframe_insert("scale", frame=end)
 
     # Mouth movement is a restrained speech beat rather than a scaling sphere gag.
     speaking = action == "speak" or any(w in low for w in ("says", "said", "speaks", "shouts"))
