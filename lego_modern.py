@@ -18,6 +18,7 @@ import os, re, sys, io, json, math, time, base64, shutil, hashlib, argparse, sub
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter, ImageEnhance
 import lego_boost as B
+from asset_licensing import lic_ok
 from realistic_director import prepare_plan
 A = B.A; E = B.E
 clamp = lambda v, a, b: max(a, min(b, v))
@@ -144,12 +145,6 @@ def net_check():
     try: http('https://commons.wikimedia.org/w/api.php?action=query&meta=siteinfo&format=json', timeout=15, tries=1); print('network: Wikimedia OK', flush=True)
     except Exception as e: Net.off.add('commons'); print(f'network: Wikimedia unreachable -> {why(e)}\n  Openverse and user-supplied local assets remain available as fallback', flush=True)
 def strip_html(s): return re.sub(r'<[^>]+>', '', s or '').strip()[:80]
-def lic_ok(license_name):
-    """Allow public domain, CC0 and CC BY only; exclude NC, ND and SA."""
-    value = re.sub(r"\s+", " ", (license_name or "").strip().lower())
-    if value in {"public domain", "public domain mark", "pdm", "cc0", "cc0 1.0"}:
-        return True
-    return re.fullmatch(r"cc[- ]by(?:[- ]?\d+(?:\.\d+)?)?", value) is not None
 def src_local(i, d):
     for ext in ('jpg', 'jpeg', 'png', 'webp'):
         p = os.path.join(d, f'{i + 1}.{ext}')
@@ -233,7 +228,7 @@ def card(text, acc, W=1920, H=1080):
     return im
 def fetch(i, s, a, style, used, cache):
     """Resolve a scene using local assets and openly licensed still images only."""
-    key = hashlib.md5((str(i) + str(s.get('queries')) + s.get('gen_prompt', '') + str(a.source)).encode()).hexdigest()[:12]
+    key = hashlib.md5(('free-license-v2|' + str(i) + str(s.get('queries')) + s.get('gen_prompt', '') + str(a.source)).encode()).hexdigest()[:12]
     cp = os.path.join(cache, key + '.jpg')
     mp = cp + '.txt'
     if os.path.exists(cp):
@@ -243,7 +238,7 @@ def fetch(i, s, a, style, used, cache):
 
     local = src_local(i, a.media)
     if local:
-        result = (local[0], f"LOCAL USER ASSET | path: {os.path.abspath(os.path.join(a.media, str(i + 1)))} | rights: user must confirm ownership or licence")
+        result = (local[0], local[1] + ' | rights: user must confirm ownership or licence')
     else:
         queries = s.get('queries') or [s.get('text', '')[:100]]
         result = src_commons(queries, used) or src_openverse(queries, used)
