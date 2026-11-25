@@ -516,7 +516,7 @@ def main():
     ap.add_argument('--style', default=None); ap.add_argument('--provider', default='auto'); ap.add_argument('--model', default=os.environ.get('LEGO_MODEL')); ap.add_argument('--nomusic', action='store_true'); ap.add_argument('--musicvol', type=float, default=.55); ap.add_argument('--cache', default='cache'); ap.add_argument('--asset-library', default='assets', help='Persistent per-script local image library.'); ap.add_argument('--offline', action='store_true', help='Never contact image websites; require a complete local asset library.'); ap.add_argument('--prepare-assets-only', action='store_true', help='Download/cache every scene image, create a contact sheet, then stop before rendering.'); ap.add_argument('--save-plan', default='modern_plan.json'); ap.add_argument('--allow-cards', action='store_true', help='Allow designed text cards when no visual provider succeeds.'); ap.add_argument('--encoder', choices=['auto', 'libx264', 'h264_qsv'], default='auto'); ap.add_argument('--resolution', choices=['720p', '1080p'], default='1080p'); a = ap.parse_args()
     script = open(a.script, encoding='utf-8').read()
     if a.prompt_only: open('modern_prompt.txt', 'w', encoding='utf-8').write(SYSTEM + '\n\nSCRIPT:\n' + script); return print('Wrote modern_prompt.txt -> paste into Claude.ai, save the JSON reply as modern_plan.json, run with --plan modern_plan.json')
-    if shutil.which('ffmpeg') is None: raise SystemExit('ffmpeg not in PATH (winget install ffmpeg)')
+    if not a.prepare_assets_only and shutil.which('ffmpeg') is None: raise SystemExit('ffmpeg not in PATH (winget install ffmpeg)')
     if a.plan: plan = json.load(open(a.plan, encoding='utf-8'))
     else:
         plan = ask_plan(script, a)
