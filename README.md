@@ -1,6 +1,6 @@
 # AI-Cinema-Engine
 
-A Python-based hybrid cinema pipeline with separate LEGO and realistic documentary renderers.
+A Python-based hybrid cinema pipeline with an offline procedural animation backend by default, plus separate LEGO and legacy realistic documentary renderers.
 
 ## Current architecture
 
@@ -95,13 +95,13 @@ The default licence filter is intentionally conservative: Public Domain/PDM, CC0
 The Openverse API is free to access subject to its terms and rate limits; Openverse may change its terms, so review them before large-scale/commercial API use. No API key is required for ordinary anonymous queries at the time of writing.
 
 
-### Fully local procedural animation mode (new)
+### Fully local procedural animation mode (default)
 
-For original visuals with no stock-image sites, online footage, external image APIs or downloaded visual assets, use the experimental Blender animation backend:
+The default renderer is now the local Blender animation backend. It does not request images or footage from websites, and it does not call external image/video-generation APIs:
 
 ```powershell
 winget install BlenderFoundation.Blender
-python cinema.py myscript.txt output_animation.mp4 --style animation
+python cinema.py myscript.txt output_animation.mp4
 ```
 
 You can also reuse a storyboard:
@@ -111,7 +111,7 @@ python cinema.py myscript.txt output_animation.mp4 --style animation --plan plan
 
 The animation backend creates its visuals locally from procedural 3D geometry, materials, lighting, a camera and a reusable human-like character. It does not contact Wikimedia, Openverse, image-generation websites or video-generation services. It is an early prototype—not yet a finished photorealistic character-animation system: facial acting, detailed rigging, lip-sync, multiple interacting characters, crowd simulation, historical costumes and audio integration remain future work. It saves a companion .blend project beside the MP4. Set `BLENDER_EXE` if Blender is not on PATH.
 
-This mode is separate from the existing realistic archive-photo mode. LEGO mode remains available. The animation backend does not require online LLM planning; without `--plan`, it splits the supplied script into scene beats locally.
+LEGO mode remains available with `--style lego`. The old archive-photo workflow is now opt-in only with `--style realistic`; it is not used by the default animation mode. The animation backend does not require online LLM planning; without `--plan`, it splits the supplied script into scene beats locally.
 
 ### LEGO mode
 
