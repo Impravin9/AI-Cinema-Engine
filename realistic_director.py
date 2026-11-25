@@ -25,6 +25,12 @@ GENERIC_CAST = {
     "officer", "officers", "crew", "army", "troops", "crowd", "people",
     "narrator", "anchor", "reporter", "doctor", "nurse", "worker", "workers",
 }
+GENERIC_ADJECTIVES = {"german", "british", "soviet", "japanese", "american", "allied",
+                      "french", "italian", "russian", "polish", "chinese", "nazi", "civilian"}
+
+def _generic_group(name: str) -> bool:
+    words = _norm(name).split()
+    return bool(words) and (words[-1] in GENERIC_CAST or (len(words) == 1 and words[0] in GENERIC_CAST))
 EVENTS = (
     (("battle of britain", "raf", "luftwaffe"), "Battle of Britain"),
     (("pearl harbor", "pearl harbour"), "Attack on Pearl Harbor"),
@@ -157,7 +163,7 @@ def prepare_plan(plan: dict[str, Any], script: str, requested_style: str | None 
             continue
         name = str(character.get("name") or "").strip()
         role = str(character.get("role") or "").lower()
-        if name and (_script_mentions(name, script_norm) or name.lower() in GENERIC_CAST):
+        if name and (_script_mentions(name, script_norm) or _generic_group(name)):
             cast.append(character)
     plan["characters"] = cast
 
@@ -177,7 +183,7 @@ def prepare_plan(plan: dict[str, Any], script: str, requested_style: str | None 
             name = str(actor.get("name") or "").strip()
             if not name:
                 continue
-            if name.lower() in GENERIC_CAST or _script_mentions(name, script_norm):
+            if _generic_group(name) or _script_mentions(name, script_norm):
                 verified_actors.append(actor)
         scene["actors"] = verified_actors
 
