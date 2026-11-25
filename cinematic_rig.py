@@ -134,7 +134,9 @@ all_rig_objects=([root,head_joint,mouth,mouth_open]
                  +[obj for arm in arm_rigs for obj in arm[:2]]
                  +[obj for leg in leg_rigs for obj in leg[:3]]
                  +brow_rigs+eye_rigs)
-'''ANIMATION_LOOP = r'''
+'''
+
+ANIMATION_LOOP = r'''
 # Directed film timeline: joint-based gait, body weight shift, acting and camera beats.
 frame = 1
 for idx, scn in enumerate(scenes):
