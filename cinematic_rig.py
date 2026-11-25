@@ -60,23 +60,20 @@ body_ellipsoid("back hair", head_joint, (0,.205,.40), (.36,.19,.34), hair)
 for x,z,ang in ((-.25,.66,-18),(-.10,.72,-8),(.08,.73,8),(.25,.66,18)):
     lock=body_ellipsoid("sculpted fringe", head_joint, (x,-.245,z), (.15,.105,.19), hair)
     lock.rotation_euler[1]=math.radians(ang)
+brow_rigs=[]
+eye_rigs=[]
 for side in (-1,1):
     body_ellipsoid("ear", head_joint, (side*.405,-.015,.32), (.095,.105,.14), skin)
     body_ellipsoid("ear inner", head_joint, (side*.448,-.105,.32), (.035,.018,.075), gold)
     # Eye whites, irises, pupils and catchlights form a readable expression at a distance.
     eye=body_ellipsoid("eye white", head_joint, (side*.155,-.322,.405), (.112,.045,.132), white)
+    eye_rigs.append(eye)
     pupil=body_ellipsoid("iris", head_joint, (side*.145,-.362,.397), (.061,.028,.080), iris)
     body_ellipsoid("pupil", head_joint, (side*.145,-.386,.397), (.034,.016,.052), hair)
     body_ellipsoid("eye sparkle", head_joint, (side*.125,-.402,.435), (.018,.010,.023), white)
     brow=body_ellipsoid("expressive eyebrow", head_joint, (side*.155,-.327,.565), (.115,.035,.035), hair)
     brow.rotation_euler[1]=math.radians(-8*side)
-    if side < 0:
-        brow_rigs=[]
     brow_rigs.append(brow)
-# Eye rig list is explicit for subtle blinks and gaze acting.
-eye_rigs=[]
-for side in (-1,1):
-    eye_rigs.append(next(o for o in head_joint.children if o.name == "eye white" and o.location.x*side > 0))
 # Soft nose, cheek blush and a shaped mouth rather than a floating black dot.
 body_ellipsoid("nose", head_joint, (0,-.375,.285), (.075,.075,.095), skin)
 for side in (-1,1):
