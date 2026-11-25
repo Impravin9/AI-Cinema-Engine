@@ -14,6 +14,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+      - name: Install test dependency
+        run: python -m pip install Pillow
       - name: Compile Python entry points and adapters
         run: python -m compileall -q cinema.py lego_cinema_fixes.py realistic_director.py video_generation.py lego_modern.py lego_boost.py core tests
       - name: Run orchestration, LEGO, realistic director and video-provider tests
