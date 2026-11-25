@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-lego_modern.py - MODERN documentary renderer (photos / AI visuals + cinematic editing + banners + neural narration). No 2D cartoon.
+lego_modern.py - realistic documentary renderer (licensed archive stills + cinematic editing + banners + narration). No 2D cartoon.
 Same folder as lego_boost.py, lego_ai.py, lego_director.py, lego_engine_v2.py (reuses their LLM + DSP code, edits nothing).
   pip install edge-tts requests ; ffmpeg in PATH
-  python lego_modern.py script.txt out.mp4                    # AI plans (needs ANTHROPIC/GEMINI/GROQ key) -> fetch visuals -> render
+  python lego_modern.py script.txt out.mp4                    # use --plan for a saved storyboard or --provider ollama for local planning -> fetch licensed visuals -> render
   python lego_modern.py script.txt --prompt-only              # no key: paste modern_prompt.txt into Claude.ai, save reply as modern_plan.json
   python lego_modern.py script.txt out.mp4 --plan modern_plan.json     # (your old plan.json also works)
   flags: --voice en-US-AndrewMultilingualNeural|en-US-AriaNeural|en-GB-RyanNeural|en-IN-PrabhatNeural  --rate +0%  --pitch -2Hz
@@ -525,7 +525,7 @@ def main():
         if video_path:
             video_frames = extract_scene_video(video_path, a.cache, W, H, FPS)
             im = Image.open(video_frames[0]).convert('RGB')
-            cr = 'Local moving footage | ' + os.path.abspath(video_path)
+            cr = 'USER-SUPPLIED MOVING FOOTAGE | ' + os.path.abspath(video_path) + ' | rights: user must confirm ownership or licence'
             print('   -> moving footage:', os.path.basename(video_path), flush=True)
         else:
             im, cr = fetch(i, s, a, style, used, a.cache)
