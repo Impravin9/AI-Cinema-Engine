@@ -124,7 +124,7 @@ bpy.ops.render.render(animation=True)
 def main():
     p=argparse.ArgumentParser(description="Fully local procedural 3D animation renderer (no image websites or online assets).")
     p.add_argument("script"); p.add_argument("out"); p.add_argument("--plan"); p.add_argument("--blender")
-    p.add_argument("--fps",type=int,default=24); p.add_argument("--seconds",type=float,default=6.0); p.add_argument("--silent",action="store_true")
+    p.add_argument("--fps",type=int,default=24); p.add_argument("--seconds",type=float,default=6.0); p.add_argument("--max-scenes",type=int,help="Render only the first N scenes."); p.add_argument("--silent",action="store_true")
     a=p.parse_args()
     source=Path(a.script).read_text(encoding="utf-8")
     if a.plan:
@@ -133,6 +133,10 @@ def main():
     else:
         plan={"title":Path(a.script).stem,"scenes":split_script(source)}
     if not plan["scenes"]: raise ValueError("No scenes found in script.")
+    if a.max_scenes is not None:
+        if a.max_scenes < 1: raise ValueError("--max-scenes must be at least 1.")
+        plan["scenes"] = plan["scenes"][:a.max_scenes]
+        print(f"[animation] Limited render to first {len(plan['scenes'])} scene(s).", flush=True)
     blender=a.blender or os.environ.get("BLENDER_EXE") or shutil.which("blender")
     if not blender: raise RuntimeError("Blender was not found. Install the free Blender desktop application and add blender.exe to PATH, or set BLENDER_EXE.")
     out=Path(a.out).resolve(); out.parent.mkdir(parents=True,exist_ok=True)
