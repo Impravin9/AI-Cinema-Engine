@@ -29,8 +29,12 @@ else:
     raise RuntimeError("No Eevee render engine is available in this Blender build. Available engines: " + ", ".join(sorted(engine_ids)))
 s.render.resolution_x=1280; s.render.resolution_y=720; s.render.resolution_percentage=100
 s.render.fps=fps
-s.render.image_settings.file_format="FFMPEG"
-s.render.ffmpeg.format="MPEG4"; s.render.ffmpeg.codec="H264"; s.render.ffmpeg.constant_rate_factor="MEDIUM"
+# Blender 5.x separates the media type from the image/video format.
+s.render.image_settings.media_type = "VIDEO"
+s.render.image_settings.file_format = "FFMPEG"
+s.render.ffmpeg.format = "MPEG4"
+s.render.ffmpeg.codec = "H264"
+s.render.ffmpeg.constant_rate_factor = "MEDIUM"
 s.render.filepath=output
 s.world.color=(0.025,0.025,0.025)
 s.view_settings.view_transform="AgX"
