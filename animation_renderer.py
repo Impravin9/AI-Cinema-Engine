@@ -31,18 +31,18 @@ elif "BLENDER_EEVEE" in engine_ids:
     s.render.engine = "BLENDER_EEVEE"
 else:
     raise RuntimeError("No Eevee render engine is available in this Blender build. Available engines: " + ", ".join(sorted(engine_ids)))
-s.render.resolution_x=640 if preview else 960; s.render.resolution_y=360 if preview else 540; s.render.resolution_percentage=100
+s.render.resolution_x=640 if preview else 1280; s.render.resolution_y=360 if preview else 720; s.render.resolution_percentage=100
 s.render.fps=fps
 s.render.use_persistent_data=True
 s.render.threads_mode='FIXED'; s.render.threads=2 if preview else 4
 if hasattr(s, 'eevee') and hasattr(s.eevee, 'taa_render_samples'):
- s.eevee.taa_render_samples=8 if preview else 16
+ s.eevee.taa_render_samples=8 if preview else 32
 # Blender 5.x separates the media type from the image/video format.
 s.render.image_settings.media_type = "VIDEO"
 s.render.image_settings.file_format = "FFMPEG"
 s.render.ffmpeg.format = "MPEG4"
 s.render.ffmpeg.codec = "H264"
-s.render.ffmpeg.constant_rate_factor = "MEDIUM"
+s.render.ffmpeg.constant_rate_factor = "HIGH"
 s.render.filepath=output
 s.world.color=(0.025,0.025,0.025)
 s.view_settings.view_transform="AgX"
@@ -113,7 +113,7 @@ def area(name,loc,power,color,size,target):
 area("warm key",(-3,-4,6),950,(1,.72,.48),5,(0,0,1.4))
 area("cool fill",(4,-2,3),600,(.35,.58,1),4,(0,0,1.4))
 area("rim",(0,3,4),1100,(1,.35,.12),3,(0,0,1.5))
-bpy.ops.object.camera_add(location=(3.2,-7.8,2.9)); cam=bpy.context.object; cam.rotation_euler=(Vector((0,0,1.35))-cam.location).to_track_quat("-Z","Y").to_euler(); cam.data.lens=48; s.camera=cam
+bpy.ops.object.camera_add(location=(3.2,-7.8,2.9)); cam=bpy.context.object; cam.rotation_euler=(Vector((0,0,1.35))-cam.location).to_track_quat("-Z","Y").to_euler(); cam.data.lens=48; cam.data.dof.use_dof=True; cam.data.dof.focus_object=root; cam.data.dof.aperture_fstop=5.6; s.camera=cam
 # A restrained title-card-free scene: no external textures, images, fonts or footage.
 caption_curve=bpy.data.curves.new("scene caption","FONT"); caption_curve.body=""; caption_curve.size=.25
 caption=bpy.data.objects.new("caption",caption_curve); s.collection.objects.link(caption); caption.location=(-2.3,-.2,.15); caption.rotation_euler=(math.radians(90),0,0); caption.data.materials.append(mat("caption ivory",(.9,.78,.54))); caption.hide_render=True
