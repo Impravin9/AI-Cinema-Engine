@@ -1,6 +1,7 @@
 import unittest
 
 from animation_renderer import BLENDER_SOURCE, split_script
+from cinematic_director import direct_plan
 
 
 class AnimationRendererTests(unittest.TestCase):
@@ -21,6 +22,27 @@ class AnimationRendererTests(unittest.TestCase):
         self.assertIn("keyframe_insert", BLENDER_SOURCE)
         self.assertNotIn("requests.get", BLENDER_SOURCE)
         self.assertNotIn("urllib.request", BLENDER_SOURCE)
+
+
+    def test_embedded_blender_script_compiles_after_rig_upgrade(self):
+        compile(BLENDER_SOURCE, "<blender_scene>", "exec")
+
+    def test_character_uses_joint_pivots_and_real_gait(self):
+        self.assertIn("hip_L", BLENDER_SOURCE)
+        self.assertIn("elbow_L", BLENDER_SOURCE)
+        self.assertIn("knee_L", BLENDER_SOURCE)
+        self.assertIn("cycles * 2", BLENDER_SOURCE)
+        self.assertNotIn("CHARACTER_ROOT", BLENDER_SOURCE)
+
+    def test_director_adds_actions_and_camera_metadata(self):
+        scenes = direct_plan([
+            {"text": "A young man runs through the forest."},
+            {"text": "He notices smoke rising above the trees."},
+        ])
+        self.assertEqual(scenes[0]["action"], "run")
+        self.assertEqual(scenes[0]["environment"], "forest")
+        self.assertEqual(scenes[1]["action"], "react")
+        self.assertEqual(scenes[1]["camera_move"], "push_in")
 
 
 if __name__ == "__main__":
