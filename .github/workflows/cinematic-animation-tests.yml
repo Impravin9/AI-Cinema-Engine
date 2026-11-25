@@ -1,0 +1,33 @@
+name: Cinematic animation tests
+
+on:
+  push:
+    branches:
+      - feature/cinematic-character-rig
+  pull_request:
+    branches:
+      - feature/cinematic-character-rig
+  workflow_dispatch:
+
+jobs:
+  animation-unit-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Compile cinematic modules
+        run: |
+          python -m py_compile animation_renderer.py cinematic_director.py cinematic_rig.py cinematic_environment.py
+
+      - name: Test animation renderer and generated Blender source
+        run: python -m unittest discover -s tests -p "test_animation_renderer.py" -v
+
+      - name: Test cinematic director
+        run: python -m unittest discover -s tests -p "test_cinematic_director.py" -v
