@@ -109,7 +109,7 @@ def build_renderer_args(args: argparse.Namespace) -> tuple[str, list[str]]:
         return renderer, command
 
     renderer = "lego_modern.py"
-    if shutil.which("ffmpeg") is None and not args.prompt_only:
+    if shutil.which("ffmpeg") is None and not args.prompt_only and not args.prepare_assets_only:
         raise ValueError("FFmpeg was not found in PATH. Install it and reopen PowerShell: winget install Gyan.FFmpeg")
     command = [script, str(output)]
     if args.plan:
