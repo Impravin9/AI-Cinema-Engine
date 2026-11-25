@@ -73,7 +73,6 @@ for side in (-1,1):
     if side < 0:
         brow_rigs=[]
     brow_rigs.append(brow)
-    eye_rigs.append(eye) if False else None
 # Eye rig list is explicit for subtle blinks and gaze acting.
 eye_rigs=[]
 for side in (-1,1):
@@ -172,6 +171,14 @@ for idx, scn in enumerate(scenes):
     travel = {"walk": .95, "run": 1.65, "fall": .12}.get(action, .18)
     direction = -1 if idx % 2 else 1
     root.rotation_euler = (0, 0, math.radians(90 * direction) if action in ("walk", "run") else 0)
+    # Reset every articulated joint at each scene boundary to prevent pose leakage.
+    for shoulder, elbow, side in arm_rigs:
+        shoulder.rotation_euler = (0,0,0)
+        elbow.rotation_euler = (0,0,0)
+    for hip, knee, ankle, side in leg_rigs:
+        hip.rotation_euler = (0,0,0)
+        knee.rotation_euler = (0,0,0)
+        ankle.rotation_euler = (0,0,0)
     head_joint.rotation_euler = (0, 0, 0)
     head_joint.keyframe_insert("rotation_euler", frame=start)
     root.location = (-travel * .5 * direction, 0, 0)
@@ -314,11 +321,11 @@ for idx, scn in enumerate(scenes):
     mouth_open.keyframe_insert("scale", frame=start)
     mouth_open.keyframe_insert("scale", frame=end)
 
-    # Mouth movement is a restrained speech beat rather than a scaling sphere gag.
+    # Jaw opening is a separate shape, preserving the designed smile silhouette.
     speaking = action == "speak" or any(w in low for w in ("says", "said", "speaks", "shouts"))
-    mouth.scale = (.072,.018,.045 if speaking else .018)
-    mouth.keyframe_insert("scale", frame=start)
-    mouth.keyframe_insert("scale", frame=end)
+    mouth_open.scale = (.073,.012,.045 if speaking else .018)
+    mouth_open.keyframe_insert("scale", frame=start)
+    mouth_open.keyframe_insert("scale", frame=end)
 
     profiles = {
         "wide": ((3.8,-9.5,3.1),35,(0,0,1.2)),
