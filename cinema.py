@@ -54,6 +54,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--video-dir", default="media/videos", help="Folder containing your own licensed moving clips (scene_001.mp4, etc.).")
     parser.add_argument("--music", default="music", help="Folder containing royalty-free music tracks.")
     parser.add_argument("--cache", default="cache", help="Visual/audio cache directory.")
+    parser.add_argument("--asset-library", default="assets", help="Persistent per-script image library directory.")
+    parser.add_argument("--prepare-assets-only", action="store_true", help="Prepare all scene images and a contact sheet, then stop before rendering.")
+    parser.add_argument("--offline", action="store_true", help="Render only from the prepared local asset library; never contact image websites.")
     parser.add_argument("--tts-voice", default="en-US-AndrewMultilingualNeural",
                         help="Narration voice in realistic mode.")
     parser.add_argument("--rate", default="+0%", help="Narration speed in realistic mode.")
@@ -127,7 +130,11 @@ def build_renderer_args(args: argparse.Namespace) -> tuple[str, list[str]]:
         command += ["--save-plan", args.save_plan]
     if args.prompt_only:
         command.append("--prompt-only")
-    command += ["--source", args.source, "--media", args.media, "--video-dir", args.video_dir, "--music", args.music, "--cache", args.cache]
+    command += ["--source", args.source, "--media", args.media, "--video-dir", args.video_dir, "--music", args.music, "--cache", args.cache, "--asset-library", args.asset_library]
+    if args.prepare_assets_only:
+        command.append("--prepare-assets-only")
+    if args.offline:
+        command.append("--offline")
     command += ["--voice", args.tts_voice, "--rate", args.rate, "--musicvol", str(args.musicvol)]
     if args.content_style:
         command += ["--style", args.content_style]
