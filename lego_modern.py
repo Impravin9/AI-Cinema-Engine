@@ -266,6 +266,8 @@ def fetch(i, s, a, style, used, cache):
     for kind in order:
         if r: break
         r = (src_commons(s['queries'], used) or src_pexels(s['queries'], used)) if kind == 'photo' else (src_gemini(gp, character_refs) or src_pollinations(gp, i * 7 + 3))
+    if not r and a.generate_video:
+        return None, 'text-to-video generation (no still reference)'
     if not r:
         if not a.allow_cards:
             raise RuntimeError(
@@ -569,6 +571,7 @@ def main():
                 )
                 generated_video_count += 1
                 video_frames = extract_scene_video(video_path, a.cache, W, H, FPS)
+                im = Image.open(video_frames[0]).convert('RGB')
                 cr = 'AI-generated moving video | LTX 2.3 Fast / Replicate | starting visual: ' + cr
             print('   ->', cr.split(' | ')[0], flush=True)
         credits.append(f'{i + 1}. {cr}')
