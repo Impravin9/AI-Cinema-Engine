@@ -28,7 +28,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("script", help="Input story/script text file.")
     parser.add_argument("out", nargs="?", default="output.mp4", help="Output MP4 path.")
-    parser.add_argument("--style", choices=("lego", "realistic", "animation"), default="realistic",
+    parser.add_argument("--style", choices=("lego", "realistic", "animation"), default="animation",
                         help="Rendering backend to use.")
     parser.add_argument("--plan", help="Reuse an existing JSON storyboard plan.")
     parser.add_argument("--provider", choices=("auto", "anthropic", "gemini", "groq", "openrouter", "ollama"),
