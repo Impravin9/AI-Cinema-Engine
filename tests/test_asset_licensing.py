@@ -1,6 +1,6 @@
 import unittest
 
-from lego_modern import lic_ok
+from asset_licensing import lic_ok
 
 
 class LicenceFilterTests(unittest.TestCase):
