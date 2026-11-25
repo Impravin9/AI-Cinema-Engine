@@ -160,7 +160,7 @@ bpy.ops.render.render(animation=True)
 def main():
     p=argparse.ArgumentParser(description="Fully local procedural 3D animation renderer (no image websites or online assets).")
     p.add_argument("script"); p.add_argument("out"); p.add_argument("--plan"); p.add_argument("--blender")
-    p.add_argument("--fps",type=int,default=24); p.add_argument("--seconds",type=float,default=6.0); p.add_argument("--max-scenes",type=int,help="Render only the first N scenes."); p.add_argument("--preview",action="store_true",help="Use 640x360 and a short low-frame-rate test render."); p.add_argument("--silent",action="store_true")
+    p.add_argument("--fps",type=int,default=15); p.add_argument("--seconds",type=float,default=6.0); p.add_argument("--max-scenes",type=int,help="Render only the first N scenes."); p.add_argument("--preview",action="store_true",help="Use 640x360 and a short low-frame-rate test render."); p.add_argument("--silent",action="store_true")
     a=p.parse_args()
     source=Path(a.script).read_text(encoding="utf-8")
     if a.plan:
