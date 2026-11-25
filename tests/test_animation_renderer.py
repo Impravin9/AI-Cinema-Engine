@@ -45,5 +45,23 @@ class AnimationRendererTests(unittest.TestCase):
         self.assertEqual(scenes[1]["camera_move"], "push_in")
 
 
+    def test_environment_upgrade_builds_real_scene_kits(self):
+        for token in ("forest undergrowth", "village hut", "interior table",
+                      "river channel", "mountain peak", "battlefield rubble"):
+            self.assertIn(token, BLENDER_SOURCE)
+        self.assertIn('"interior": []', BLENDER_SOURCE)
+        self.assertIn("continuous terrain", BLENDER_SOURCE)
+
+    def test_director_detects_indoor_scenes_and_emotion(self):
+        scene = direct_plan([{"text": "Inside the palace, the frightened guard kneels."}])[0]
+        self.assertEqual(scene["environment"], "interior")
+        self.assertEqual(scene["mood"], "fear")
+        self.assertEqual(scene["action"], "fall")
+
+    def test_director_uses_whole_words(self):
+        scene = direct_plan([{"text": "The runner stood beside a runway."}])[0]
+        self.assertEqual(scene["action"], "observe")
+
+
 if __name__ == "__main__":
     unittest.main()
