@@ -29,81 +29,53 @@ $env:GEMINI_API_KEY = "YOUR_KEY"
 
 Alternatively, use Ollama where supported by the selected legacy director.
 
-### Realistic film mode (primary live-action pipeline)
+### Realistic film mode (free-asset workflow)
 
-The realistic renderer now has its own story-grounded director layer:
+The realistic renderer uses **free, licence-filtered still images by default**. It does not call paid image or video-generation APIs.
 
-- `realistic_director.py` derives scene-specific archive queries from the narration, selects shot sizes/camera direction, rejects unsupported named cast and writes photorealistic period-correct generation prompts.
-- Old LEGO `plan.json` files are adapted, but their minifigure actors/props are not blindly treated as realistic scene direction.
-- Historical prompts prohibit modern public figures, contemporary objects and anachronistic uniforms/equipment.
-- Named people receive reusable Gemini identity-reference portraits when `GEMINI_API_KEY` is configured; generated scene images can use those references for better continuity.
-- A scene can use a real moving clip from `media/videos/scene_001.mp4`, `scene_002.mp4`, etc. The renderer decodes clips, places them on the narration timeline, adds captions, transitions, sound effects, music and voiceover.
-- If no suitable visual can be found or generated, rendering stops with a clear error instead of silently filling the film with text cards. Use `--allow-cards` only when you explicitly want that fallback.
+- realistic_director.py derives scene-specific archive queries from the narration, selects shot sizes/camera direction, rejects unsupported named cast and writes period-aware prompts.
+- The visual search order is: your own numbered files in media/ → Wikimedia Commons → Openverse.
+- The automatic downloader accepts only Public Domain/PDM, CC0 and CC BY images. It deliberately rejects non-commercial, no-derivatives and share-alike licences in the default workflow.
+- Every downloaded image records its title, creator, licence, licence URL and original source URL. The renderer writes both output_credits.txt (for your YouTube description) and output_assets.json (a machine-readable provenance record).
+- Your own images and videos are not automatically assumed to be copyright-safe: only add assets you created or have permission/licence to use.
+- If no acceptable image is found, rendering stops rather than silently downloading a random copyrighted image. Use --allow-cards only if you want a locally designed original graphic as fallback.
+- The renderer applies local crop/resize, colour grading, cinematic movement, captions, transitions, sound effects, music and voiceover with Python/Pillow/FFmpeg.
+- You can add your own properly licensed moving clips in media/videos/scene_001.mp4, scene_002.mp4, etc. Their audio is ignored; the engine mixes its own narration/music/SFX.
 
-Set a Gemini key in PowerShell (used for planning and photorealistic images):
+Install Python dependencies and FFmpeg:
 
 ```powershell
-$env:GEMINI_API_KEY = "YOUR_KEY"
+python -m pip install -r requirements-cinema.txt
+winget install Gyan.FFmpeg
 ```
 
-Render the existing story using its existing plan:
+Use an existing storyboard:
 
 ```powershell
 python cinema.py myscript.txt output_realistic.mp4 --style realistic --plan plan.json --content-style history --source auto
 ```
 
-Run a quick low-resolution test first:
+Run a low-resolution test first:
 
 ```powershell
-python cinema.py myscript.txt realistic_preview.mp4 --style realistic --plan plan.json --content-style history --source gen --preview --silent --nomusic
+python cinema.py myscript.txt realistic_preview.mp4 --style realistic --plan plan.json --content-style history --preview --silent --nomusic
 ```
 
-Use the 1080p final render (default) or force 720p:
+Render 1080p (default) or 720p:
 
 ```powershell
 python cinema.py myscript.txt output_realistic_1080p.mp4 --style realistic --plan plan.json --content-style history --resolution 1080p
 ```
 
-Intel graphics: `--encoder auto` tests whether FFmpeg can initialize Intel Quick Sync (H.264 QSV). It selects QSV only if the runtime test succeeds; otherwise it falls back to CPU `libx264`. To require QSV, use `--encoder h264_qsv`. To force CPU encoding, use `--encoder libx264`.
+Intel graphics: --encoder auto tests whether FFmpeg can initialize Intel Quick Sync (H.264 QSV). It selects QSV only if the runtime test succeeds; otherwise it falls back to CPU libx264. To require QSV, use --encoder h264_qsv. To force CPU encoding, use --encoder libx264.
 
-Optional generated/live-action scene clips can replace individual still images. Put clips in `media/videos` and name them `scene_001.mp4`, `scene_002.mp4`, etc. The clip's audio is ignored; narration, music and sound effects are mixed by the engine. A clip shorter than its narration scene holds its last frame; use clips at least as long as the spoken scene for best results.
+#### Copyright and YouTube safety
 
-#### Generate moving scenes automatically (paid cloud GPU)
+A transformation (crop, filter, colour grade, pan/zoom, captions or narration) does **not** make an unlicensed image yours. Use the original licence terms, preserve the attribution and keep the generated assets manifest. Openverse is a discovery index, not a legal warranty: verify the original source page and licence before publishing. YouTube states that even public-domain/Creative Commons/fair-use routes do not guarantee freedom from Content ID claims or copyright strikes. If a claim appears, use the original source page and saved provenance to review or dispute it only when you have a valid basis.
 
-The optional provider is Lightricks **LTX 2.3 Fast** through Replicate. When a still reference exists, it uses image-to-video to animate that scene; otherwise it can generate from the shot prompt alone. It applies the directed camera movement and returns an MP4 that is assembled with the rest of the film. The local Intel GPU is used for local editing/encoding when QSV is available; video generation runs on Replicate's cloud GPU and is billed by Replicate.
+The default licence filter is intentionally conservative: Public Domain/PDM, CC0 and CC BY only. CC BY requires attribution. CC BY-SA, NC and ND are excluded until their additional conditions can be handled explicitly.
 
-Set your Replicate token in PowerShell:
-
-```powershell
-$env:REPLICATE_API_TOKEN = "YOUR_REPLICATE_TOKEN"
-```
-
-Generate only two scene clips first (recommended cost-controlled test):
-
-```powershell
-python cinema.py myscript.txt realistic_ai_preview.mp4 --style realistic --plan plan.json --content-style history --source auto --preview --silent --nomusic --generate-video --video-max-scenes 2 --video-duration 6
-```
-
-Generate all scenes only after reviewing the first clips:
-
-```powershell
-python cinema.py myscript.txt realistic_full.mp4 --style realistic --plan plan.json --content-style history --source auto --generate-video --video-max-scenes 0 --video-duration 6
-```
-
-Generated clips are saved in `media/videos/scene_001.mp4`, etc. They are reused on later runs, so completed scenes are not regenerated. Delete a clip only when you intentionally want to regenerate that scene. The provider is opt-in; ordinary rendering never spends Replicate credits. Check Replicate's current model pricing before generating a full documentary.
-
-Useful realistic options:
-
-- `--source auto|photo|gen`
-- `--content-style history|mythology|news|science|animals|story`
-- `--resolution 720p|1080p` (1080p default)
-- `--encoder auto|libx264|h264_qsv`
-- `--video-dir media/videos`
-- `--preview` for 640x360 at 12 fps
-- `--silent` to disable narration
-- `--allow-cards` to explicitly permit text-card fallback
-- `--media media` and `--music music` for local assets
-
+The Openverse API is free to access subject to its terms and rate limits; Openverse may change its terms, so review them before large-scale/commercial API use. No API key is required for ordinary anonymous queries at the time of writing.
 
 ### LEGO mode
 
