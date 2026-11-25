@@ -15,10 +15,13 @@ _GROUP_TERMS = {
     "soldier", "soldiers", "troop", "troops", "army", "armies", "civilian",
     "civilians", "refugee", "refugees", "pilot", "pilots", "sailor", "sailors",
     "crew", "workers", "worker", "people", "crowd", "villagers", "villager",
-    "police", "officer", "officers", "commander", "commanders", "general",
-    "generals", "leader", "leaders", "king", "queen", "minister", "president",
-    "doctor", "nurse", "scientist", "reporter", "journalist", "teacher",
-    "family", "children", "child", "man", "woman", "men", "women"
+    "police", "officers", "commanders", "generals", "leaders", "family",
+    "children", "families", "staff", "resistance", "partisans"
+}
+_GENERIC_ROLE_NAMES = {
+    "soldier", "civilian", "pilot", "sailor", "commander", "general",
+    "king", "queen", "minister", "president", "doctor", "nurse",
+    "scientist", "reporter", "journalist", "teacher", "villager", "police"
 }
 
 def set_source_script(text: str) -> None:
@@ -32,7 +35,7 @@ def _is_group(name: str, role: str | None) -> bool:
     words = set(_words(name))
     # A named person may have a role such as "president" or "general".
     # Role alone must never whitelist an otherwise unmentioned real person.
-    return bool(words & _GROUP_TERMS)
+    return bool(words & _GROUP_TERMS) or (len(words) == 1 and bool(words & _GENERIC_ROLE_NAMES))
 
 def _mentioned(name: str, source: str) -> bool:
     n = _words(name)
