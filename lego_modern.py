@@ -552,10 +552,10 @@ def main():
             image.convert('RGB').save(target, quality=94)
             register_scene_asset(library_dir, asset_manifest, asset_i, asset_scene, credit)
             prepared_assets[asset_i] = (Image.open(target).convert('RGB'), credit)
-            print(f'asset {asset_i + 1}/{len(plan[\'scenes\'])}: saved locally', flush=True)
+            print(f'asset {asset_i + 1}/{total_assets}: saved locally', flush=True)
         except Exception as exc:
             save_manifest(library_dir, asset_manifest)
-            raise SystemExit(f'Asset preparation stopped at scene {asset_i + 1}/{len(plan[\'scenes\'])}: {exc}\\nCompleted scene assets are saved in {library_dir}. Run the same command later to resume; completed scenes will not be downloaded again.')
+            raise SystemExit(f'Asset preparation stopped at scene {asset_i + 1}/{total_assets}: {exc}\\nCompleted scene assets are saved in {library_dir}. Run the same command later to resume; completed scenes will not be downloaded again.')
     # Contact sheet lets the creator visually review the complete asset set before editing.
     thumbs = []
     for asset_i, (asset_image, _) in prepared_assets.items():
