@@ -557,8 +557,10 @@ def main():
             if a.generate_video and (a.video_max_scenes == 0 or generated_video_count < a.video_max_scenes):
                 video_path = os.path.join(a.video_dir, f'scene_{i + 1:03d}.mp4')
                 video_prompt = (
-                    "A continuous photorealistic live-action documentary shot. "
-                    + s['gen_prompt']
+                    s['gen_prompt'].replace(
+                        "Create one coherent photorealistic cinematic film frame, not an illustration, not LEGO, not a collage.",
+                        "A continuous photorealistic live-action documentary shot."
+                    )
                     + " Animate the exact action described here as physically believable continuous motion: "
                     + s['text']
                     + " Natural human movement, realistic weight and inertia, coherent environment, "
