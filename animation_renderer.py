@@ -116,7 +116,7 @@ area("rim",(0,3,4),1100,(1,.35,.12),3,(0,0,1.5))
 bpy.ops.object.camera_add(location=(3.2,-7.8,2.9)); cam=bpy.context.object; cam.rotation_euler=(Vector((0,0,1.35))-cam.location).to_track_quat("-Z","Y").to_euler(); cam.data.lens=48; s.camera=cam
 # A restrained title-card-free scene: no external textures, images, fonts or footage.
 caption_curve=bpy.data.curves.new("scene caption","FONT"); caption_curve.body=""; caption_curve.size=.25
-caption=bpy.data.objects.new("caption",caption_curve); s.collection.objects.link(caption); caption.location=(-2.3,-.2,.15); caption.rotation_euler=(math.radians(90),0,0); caption.data.materials.append(mat("caption ivory",(.9,.78,.54)))
+caption=bpy.data.objects.new("caption",caption_curve); s.collection.objects.link(caption); caption.location=(-2.3,-.2,.15); caption.rotation_euler=(math.radians(90),0,0); caption.data.materials.append(mat("caption ivory",(.9,.78,.54))); caption.hide_render=True
 # Animate all scenes in one continuous film; character acts are varied by semantic cues.
 frame=1
 for idx,scn in enumerate(scenes):
