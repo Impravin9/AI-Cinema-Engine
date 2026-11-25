@@ -7,6 +7,7 @@ from pathlib import Path
 from cinematic_director import direct_plan
 from cinematic_environment import upgrade_environment_source
 from cinematic_rig import upgrade_blender_source
+from character_assets import validate_character_asset, inject_character_import
 
 def split_script(text):
     parts = [x.strip() for x in re.split(r'(?<=[.!?])\s+', text) if x.strip()]
@@ -19,6 +20,7 @@ import bpy, sys, json, math, os
 from mathutils import Vector
 args = sys.argv[sys.argv.index("--")+1:]
 plan_path, output, fps, seconds, preview = args[0], args[1], int(args[2]), float(args[3]), args[4] == "1"
+character_asset = args[5] if len(args) > 5 else ""
 plan=json.load(open(plan_path,encoding="utf-8"))
 scenes=plan.get("scenes") or [{"text":plan.get("title","A cinematic moment")}]
 bpy.ops.object.select_all(action="SELECT"); bpy.ops.object.delete(use_global=False)
@@ -184,11 +186,13 @@ bpy.ops.render.render(animation=True)
 
 BLENDER_SOURCE = upgrade_environment_source(BLENDER_SOURCE)
 BLENDER_SOURCE = upgrade_blender_source(BLENDER_SOURCE)
+BLENDER_SOURCE = inject_character_import(BLENDER_SOURCE)
 
 
 def main():
     p=argparse.ArgumentParser(description="Fully local procedural 3D animation renderer (no image websites or online assets).")
     p.add_argument("script"); p.add_argument("out"); p.add_argument("--plan"); p.add_argument("--blender")
+    p.add_argument("--character-asset", help="Path to a licensed Blender .blend character asset; replaces the procedural hero.")
     p.add_argument("--fps",type=int,default=15); p.add_argument("--seconds",type=float,default=6.0); p.add_argument("--max-scenes",type=int,help="Render only the first N scenes."); p.add_argument("--preview",action="store_true",help="Use 640x360 and a short low-frame-rate test render."); p.add_argument("--silent",action="store_true")
     a=p.parse_args()
     source=Path(a.script).read_text(encoding="utf-8")
@@ -217,9 +221,9 @@ def main():
         plan_path.write_text(json.dumps(plan,ensure_ascii=False),encoding="utf-8"); py_path.write_text(BLENDER_SOURCE,encoding="utf-8")
         fps = max(6, min(12, a.fps)) if a.preview else max(12, min(60, a.fps))
         seconds = max(1.0, min(2.0, a.seconds)) if a.preview else max(2.0, min(20.0, a.seconds))
-        cmd=[blender,"-b","-t","2" if a.preview else "4","--python",str(py_path),"--",str(plan_path),str(out),str(fps),str(seconds),"1" if a.preview else "0"]
-        print("[animation] Backend: local Blender procedural 3D",flush=True)
-        print("[animation] Visual source: generated geometry/materials/lighting only; no external image or footage requests.",flush=True)
+        cmd=[blender,"-b","-t","2" if a.preview else "4","--python",str(py_path),"--",str(plan_path),str(out),str(fps),str(seconds),"1" if a.preview else "0"]\n        if character_asset:\n            cmd.append(str(character_asset))
+        print("[animation] Backend: local Blender 3D with authored character asset" if character_asset else "[animation] Backend: local Blender procedural fallback",flush=True)
+        print("[animation] Character source: " + str(character_asset) if character_asset else "[animation] Character source: procedural fallback",flush=True)
         print(f"[animation] Scenes: {len(plan['scenes'])}; target: {out}",flush=True)
         if a.preview: print("[animation] Preview mode: 640x360, maximum 12 fps, maximum 2 seconds per scene.",flush=True)
         result=subprocess.run(cmd)
