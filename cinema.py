@@ -57,7 +57,6 @@ def build_parser() -> argparse.ArgumentParser:
                         help="Narration voice in realistic mode.")
     parser.add_argument("--rate", default="+0%", help="Narration speed in realistic mode.")
     parser.add_argument("--preview", action="store_true", help="Render realistic mode at 640x360 / 12 fps.")
-    parser.add_argument("--silent", action="store_true", help="Disable narration.")
     parser.add_argument("--endcard", action="store_true", help="Add an end card in realistic mode.")
     parser.add_argument("--nomusic", action="store_true", help="Disable the generated music bed.")
     parser.add_argument("--musicvol", type=float, default=0.55, help="Music bed volume.")
