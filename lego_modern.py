@@ -273,6 +273,43 @@ def fetch(i, s, a, style, used, cache):
             )
         r = (card(re.sub(r'\s+', ' ', s['text'])[:90], ACC.get(style, ACC['history'])), 'designed card')
     im = r[0].convert('RGB'); im.save(cp, quality=93); open(mp, 'w').write(r[1]); return im, r[1]
+def locate_scene_video(index, folder):
+    """Find an optional moving scene clip using a predictable 1-based filename."""
+    names = (f"scene_{index + 1:03d}.mp4", f"scene_{index + 1}.mp4",
+             f"{index + 1:03d}.mp4", f"{index + 1}.mp4")
+    for name in names:
+        path = os.path.join(folder, name)
+        if os.path.isfile(path):
+            return path
+    return None
+
+def extract_scene_video(path, cache, W, H, FPS):
+    """Decode a scene clip into cached frames so it can share the existing edit timeline."""
+    stat = os.stat(path)
+    key = hashlib.sha1(f"{os.path.abspath(path)}|{stat.st_size}|{stat.st_mtime_ns}|{W}|{H}|{FPS}".encode()).hexdigest()[:16]
+    folder = os.path.join(cache, 'video_frames', key)
+    os.makedirs(folder, exist_ok=True)
+    existing = sorted(
+        os.path.join(folder, name) for name in os.listdir(folder)
+        if name.lower().endswith('.jpg') and name.startswith('frame_')
+    )
+    if existing:
+        return existing
+    pattern = os.path.join(folder, 'frame_%06d.jpg')
+    vf = f"fps={FPS},scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H}"
+    result = subprocess.run(
+        ['ffmpeg', '-y', '-v', 'error', '-i', path, '-an', '-vf', vf,
+         '-q:v', '2', pattern],
+        capture_output=True, text=True
+    )
+    frames = sorted(
+        os.path.join(folder, name) for name in os.listdir(folder)
+        if name.lower().endswith('.jpg') and name.startswith('frame_')
+    )
+    if result.returncode != 0 or not frames:
+        raise RuntimeError(f"Could not decode scene video {path}: {(result.stderr or 'no frames produced')[-500:]}")
+    return frames
+
 def compose(im, W=1920, H=1080):
     """cover-crop if aspect ok, else blurred-fill background + contained sharp image"""
     ar = im.width / im.height
@@ -349,6 +386,11 @@ class Ren:
         s.vig = (1 - .38 * np.clip(d - .55, 0, 1) ** 1.4)[..., None].astype(np.float32); s.rng = np.random.default_rng(5); s.sh = H / 720; s.cc = {}
     def F(s, sz): return E.font(sz * s.sh)
     def base(s, sc, t):
+        if sc.get('video_frames'):
+            frames = sc['video_frames']
+            frame_index = min(len(frames) - 1, max(0, int(t * s.FPS)))
+            return s.patch(('video', sc['si'], frame_index),
+                           lambda: Image.open(frames[frame_index]).convert('RGB').resize((s.W, s.H), Image.LANCZOS))
         u = t / max(sc['dur'], .1); z, cx, cy = kb(sc, u, t); B_ = sc['img']; w = B_.width / z; h = B_.height / z; x0 = clamp(cx * B_.width - w / 2, 0, B_.width - w); y0 = clamp(cy * B_.height - h / 2, 0, B_.height - h)
         return B_.resize((s.W, s.H), Image.BICUBIC, box=(x0, y0, x0 + w, y0 + h))
     def trans(s, a, b, kind, p):
@@ -479,7 +521,7 @@ def select_video_encoder(requested):
 
 def main():
     ap = argparse.ArgumentParser(); ap.add_argument('script'); ap.add_argument('out', nargs='?', default='modern.mp4'); ap.add_argument('--plan'); ap.add_argument('--prompt-only', action='store_true'); ap.add_argument('--voice', default='en-US-AndrewMultilingualNeural'); ap.add_argument('--rate', default='+0%')
-    ap.add_argument('--source', default='auto', choices=['auto', 'photo', 'gen']); ap.add_argument('--media', default='media'); ap.add_argument('--music', default='music'); ap.add_argument('--preview', action='store_true'); ap.add_argument('--silent', action='store_true'); ap.add_argument('--endcard', action='store_true')
+    ap.add_argument('--source', default='auto', choices=['auto', 'photo', 'gen']); ap.add_argument('--media', default='media'); ap.add_argument('--video-dir', default='media/videos', help='Optional generated scene clips: scene_001.mp4, scene_002.mp4, etc.'); ap.add_argument('--music', default='music'); ap.add_argument('--preview', action='store_true'); ap.add_argument('--silent', action='store_true'); ap.add_argument('--endcard', action='store_true')
     ap.add_argument('--style', default=None); ap.add_argument('--provider', default='auto'); ap.add_argument('--model', default=os.environ.get('LEGO_MODEL')); ap.add_argument('--nomusic', action='store_true'); ap.add_argument('--musicvol', type=float, default=.55); ap.add_argument('--cache', default='cache'); ap.add_argument('--save-plan', default='modern_plan.json'); ap.add_argument('--allow-cards', action='store_true', help='Allow designed text cards when no visual provider succeeds.'); ap.add_argument('--encoder', choices=['auto', 'libx264', 'h264_qsv'], default='auto'); ap.add_argument('--resolution', choices=['720p', '1080p'], default='1080p'); a = ap.parse_args()
     script = open(a.script, encoding='utf-8').read()
     if a.prompt_only: open('modern_prompt.txt', 'w', encoding='utf-8').write(SYSTEM + '\n\nSCRIPT:\n' + script); return print('Wrote modern_prompt.txt -> paste into Claude.ai, save the JSON reply as modern_plan.json, run with --plan modern_plan.json')
@@ -493,10 +535,20 @@ def main():
     plan = adapt(plan, a.style); style = plan['style']; W, H, FPS = (640, 360, 12) if a.preview else ((1920, 1080, 24) if a.resolution == '1080p' else (1280, 720, 24)); os.makedirs(a.cache, exist_ok=True); net_check() if a.source != 'gen' else None; used = set(); scenes = []; credits = []
     rate = {'tense': '-4%', 'sad': '-6%', 'calm': '-2%', 'epic': '+0%', 'up': '+5%'}; tts = None if a.silent else tts_scene(a, rate); t0 = 0.0
     for i, s in enumerate(plan['scenes']):
-        print(f'scene {i + 1}/{len(plan["scenes"])}: {s["text"][:60]}', flush=True); im, cr = fetch(i, s, a, style, used, a.cache); print('   ->', cr.split(' | ')[0], flush=True); credits.append(f'{i + 1}. {cr}')
+        print(f'scene {i + 1}/{len(plan["scenes"])}: {s["text"][:60]}', flush=True)
+        video_path = locate_scene_video(i, a.video_dir)
+        video_frames = extract_scene_video(video_path, a.cache, W, H, FPS) if video_path else None
+        if video_frames:
+            im = Image.open(video_frames[0]).convert('RGB')
+            cr = 'Local generated video clip | ' + os.path.abspath(video_path)
+            print('   -> moving footage:', os.path.basename(video_path), flush=True)
+        else:
+            im, cr = fetch(i, s, a, style, used, a.cache)
+            print('   ->', cr.split(' | ')[0], flush=True)
+        credits.append(f'{i + 1}. {cr}')
         wav, vd = (tts(s['text'], i, s['mood']) if tts else (None, max(2.8, len(s['text'].split()) / 2.6)))
         d = max(3.0, vd + .5); tr = 0 if i == 0 or s['transition'] == 'cut' else .55 if s['transition'] != 'whip' else .45
-        sc = dict(s, si=i, t0=t0, dur=d, img=grade(compose(im), s['mood']), wav=wav, tr=tr, kind=s['transition'], kar=kar(s['text'], d, vd), subtitle=plan.get('subtitle', 'A DOCUMENTARY' if style != 'news' else 'SPECIAL REPORT'))
+        sc = dict(s, si=i, t0=t0, dur=d, img=grade(compose(im), s['mood']), video_frames=video_frames, wav=wav, tr=tr, kind=s['transition'], kar=kar(s['text'], d, vd), subtitle=plan.get('subtitle', 'A DOCUMENTARY' if style != 'news' else 'SPECIAL REPORT'))
         sa = []
         if tr and sc['kind'] in ('whip', 'flash', 'fade', 'dip'): sa.append((t0 - .2, 'whoosh'))
         if s['banner'].get('kind') in ('stat', 'quote'): sa.append((t0 + .6, 'thud'))
