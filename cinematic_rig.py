@@ -9,6 +9,7 @@ from __future__ import annotations
 CHARACTER_BUILD = r'''
 # Stylized feature-animation hero: deliberately designed proportions, clean silhouette,
 # expressive face, layered costume and light geometry for fast Eevee rendering.
+procedural_objects_before = set(bpy.data.objects)
 root = bpy.data.objects.new("HERO_ROOT", None)
 s.collection.objects.link(root)
 root.empty_display_type = "PLAIN_AXES"
@@ -131,6 +132,7 @@ all_rig_objects=([root,head_joint,mouth,mouth_open]
                  +[obj for arm in arm_rigs for obj in arm[:2]]
                  +[obj for leg in leg_rigs for obj in leg[:3]]
                  +brow_rigs+eye_rigs)
+procedural_character_objects = list(set(bpy.data.objects) - procedural_objects_before)
 '''
 
 ANIMATION_LOOP = r'''
