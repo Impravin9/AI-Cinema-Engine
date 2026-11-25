@@ -161,7 +161,7 @@ def src_commons(qs, used):
                 if ii.get('mime') not in ('image/jpeg', 'image/png') or ii.get('width', 0) < 1000 or ii.get('width', 0) < ii.get('height', 1) * .9 or not lic_ok(lic) or ii['url'] in used: continue
                 try: im = Image.open(io.BytesIO(http(ii.get('thumburl') or ii['url'], timeout=40)))
                 except Exception as e: Net.bad('commons', e); continue
-                used.add(ii['url']); return im, f"Wikimedia Commons | {strip_html(em.get('Artist', {}).get('value'))} | {lic} | {ii.get('descriptionurl')}"
+                used.add(ii['url']); return im, f"Wikimedia Commons | title: {strip_html(p.get('title'))} | creator: {strip_html(em.get('Artist', {}).get('value')) or 'Creator not stated'} | licence: {lic} | licence terms: {strip_html(em.get('LicenseUrl', {}).get('value'))} | original source: {ii.get('descriptionurl')}"
         except Exception as e:
             Net.bad('commons', e)
             if not Net.ok('commons'): return
@@ -204,7 +204,7 @@ def src_openverse(qs, used):
                 used.add(source_url)
                 title = strip_html(item.get('title') or 'Untitled')
                 creator = strip_html(item.get('creator') or 'Creator not stated')
-                licence = f"CC {lic.upper()} {item.get('license_version') or ''}".strip()
+                licence = ('CC0 ' + str(item.get('license_version') or '1.0')) if lic == 'cc0' else ('Public Domain Mark' if lic == 'pdm' else 'CC BY ' + str(item.get('license_version') or '4.0'))
                 credit = (
                     f"Openverse | title: {title} | creator: {creator} | "
                     f"licence: {licence} | licence terms: {item.get('license_url') or ''} | "
@@ -231,9 +231,15 @@ def fetch(i, s, a, style, used, cache):
     key = hashlib.md5(('free-license-v2|' + str(i) + str(s.get('queries')) + s.get('gen_prompt', '') + str(a.source)).encode()).hexdigest()[:12]
     cp = os.path.join(cache, key + '.jpg')
     mp = cp + '.txt'
-    if os.path.exists(cp):
-        cached_credit = open(mp, encoding='utf-8').read() if os.path.exists(mp) else 'cached asset; verify provenance'
-        if a.allow_cards or not cached_credit.startswith('designed card'):
+    if os.path.exists(cp) and os.path.exists(mp):
+        cached_credit = open(mp, encoding='utf-8').read()
+        cache_allowed = cached_credit.startswith('LOCAL USER ASSET |')
+        if cached_credit.startswith(('Wikimedia Commons |', 'Openverse |')):
+            match = re.search(r'licence:\\s*([^|]+)', cached_credit, re.IGNORECASE)
+            cache_allowed = bool(match and lic_ok(match.group(1).strip()))
+        if cached_credit.startswith('designed card |'):
+            cache_allowed = bool(a.allow_cards)
+        if cache_allowed:
             return Image.open(cp).convert('RGB'), cached_credit
 
     local = src_local(i, a.media)
