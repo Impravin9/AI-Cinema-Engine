@@ -68,6 +68,30 @@ Intel graphics: `--encoder auto` tests whether FFmpeg can initialize Intel Quick
 
 Optional generated/live-action scene clips can replace individual still images. Put clips in `media/videos` and name them `scene_001.mp4`, `scene_002.mp4`, etc. The clip's audio is ignored; narration, music and sound effects are mixed by the engine. A clip shorter than its narration scene holds its last frame; use clips at least as long as the spoken scene for best results.
 
+#### Generate moving scenes automatically (paid cloud GPU)
+
+The optional provider is Lightricks **LTX 2.3 Fast** through Replicate. It animates the director's scene reference image, uses the directed camera movement, and returns an MP4 that is assembled with the rest of the film. The local Intel GPU is used for local editing/encoding when QSV is available; video generation runs on Replicate's cloud GPU and is billed by Replicate.
+
+Set your Replicate token in PowerShell:
+
+```powershell
+$env:REPLICATE_API_TOKEN = "YOUR_REPLICATE_TOKEN"
+```
+
+Generate only two scene clips first (recommended cost-controlled test):
+
+```powershell
+python cinema.py myscript.txt realistic_ai_preview.mp4 --style realistic --plan plan.json --content-style history --source auto --preview --silent --nomusic --generate-video --video-max-scenes 2 --video-duration 6
+```
+
+Generate all scenes only after reviewing the first clips:
+
+```powershell
+python cinema.py myscript.txt realistic_full.mp4 --style realistic --plan plan.json --content-style history --source auto --generate-video --video-max-scenes 0 --video-duration 6
+```
+
+Generated clips are saved in `media/videos/scene_001.mp4`, etc. They are reused on later runs, so completed scenes are not regenerated. Delete a clip only when you intentionally want to regenerate that scene. The provider is opt-in; ordinary rendering never spends Replicate credits. Check Replicate's current model pricing before generating a full documentary.
+
 Useful realistic options:
 
 - `--source auto|photo|gen`
@@ -113,7 +137,7 @@ python -m unittest discover -s tests -v
 
 ## Realistic-renderer scope and limitations
 
-The current renderer combines still-image cinematography (camera moves, grading, titles, captions, transitions, sound design and narration) with optional real moving scene clips supplied in `media/videos`. It does not yet synthesize a unique moving video clip for every scene by itself. The next development milestone is a video-generation provider layer with shot-level prompts, identity references and clip QA. The existing image-first path remains the reliable fallback when no video provider is configured.
+The current renderer combines still-image cinematography with optional generated moving footage. LTX 2.3 Fast can generate scene clips from the director's still references; local clips can also be supplied manually. AI video generation is an opt-in paid cloud operation, not a local Intel-GPU workload. The image-first path remains the reliable fallback when video generation is not requested.
 
 Intel QSV is an optional H.264 encoding acceleration only. It does not accelerate AI image/video generation. Intel QSV is selected only after a real FFmpeg runtime probe; CPU encoding remains the fallback.
 
