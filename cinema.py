@@ -127,6 +127,8 @@ def build_renderer_args(args: argparse.Namespace) -> tuple[str, list[str]]:
         command += ["--fps", str(args.animation_fps), "--seconds", str(args.animation_seconds)]
         if args.max_scenes is not None:
             command += ["--max-scenes", str(args.max_scenes)]
+        if args.preview:
+            command.append("--preview")
         if args.silent:
             command.append("--silent")
         return renderer, command
