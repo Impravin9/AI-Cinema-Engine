@@ -119,11 +119,11 @@ for i, x in enumerate((-4.1,0,4.1)):
     roof_obj.name="thatch roof"
     roof_obj.data.materials.append(thatch)
     env_add("village",roof_obj)
-    env_cube("village","wooden doorway",(x,-.17,.70),(.48,.09,1.25),wood,.025)
-    env_cube("village","door crossbar",(x,-.225,.78),(.40,.035,.07),metal,.01)
+    env_cube("village","wooden doorway",(x,2.10,.70),(.48,.09,1.25),wood,.025)
+    env_cube("village","door crossbar",(x,2.045,.78),(.40,.035,.07),metal,.01)
     for side in (-1,1):
-        env_cube("village","window recess",(x+side*.67,-.18,1.16),(.36,.08,.42),wood,.02)
-        env_cube("village","window shutter",(x+side*.67,-.235,1.16),(.26,.035,.34),thatch,.015)
+        env_cube("village","window recess",(x+side*.67,2.10,1.16),(.36,.08,.42),wood,.02)
+        env_cube("village","window shutter",(x+side*.67,2.045,1.16),(.26,.035,.34),thatch,.015)
     for side in (-1,1):
         beam=cyl("hut timber post",(x+side*.98,2.12,.08),(x+side*.98,2.12,1.78),.055,wood)
         env_add("village",beam)
@@ -213,6 +213,21 @@ for i in range(7):
     puff=uv("smoke plume",(2.5+i*.11,2.0,1.0+i*.42),
             (.42+i*.045,.38+i*.045,.48+i*.07),smoke_mat)
     env_add("smoke",puff)
+
+# Atmospheric world fill plus a broad sun key: useful even in wide establishing shots.
+if s.world is None:
+    s.world = bpy.data.worlds.new("cinematic atmosphere")
+s.world.use_nodes = True
+world_bg = s.world.node_tree.nodes.get("Background")
+if world_bg:
+    world_bg.inputs["Color"].default_value = (.075,.105,.15,1)
+    world_bg.inputs["Strength"].default_value = .32
+bpy.ops.object.light_add(type="SUN", location=(0,0,8))
+sun = bpy.context.object
+sun.name = "cinematic sun"
+sun.data.energy = 1.35
+sun.data.angle = math.radians(18)
+sun.rotation_euler = (math.radians(24), math.radians(-18), math.radians(-28))
 
 # Default to the landscape kit, not an empty black stage.
 for group, objects in environment_objects.items():
