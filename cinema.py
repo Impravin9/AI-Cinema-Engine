@@ -49,6 +49,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--blender", help="Path to Blender executable (or set BLENDER_EXE).")
     parser.add_argument("--animation-fps", type=int, default=24, help="Animation frame rate.")
     parser.add_argument("--animation-seconds", type=float, default=6.0, help="Seconds per generated scene.")
+    parser.add_argument("--max-scenes", type=int, help="Render only the first N scenes (useful for short tests).")
 
     # Realistic documentary options
     parser.add_argument("--content-style", choices=("history", "mythology", "news", "science", "animals", "story"),
@@ -124,6 +125,8 @@ def build_renderer_args(args: argparse.Namespace) -> tuple[str, list[str]]:
         if args.blender:
             command += ["--blender", args.blender]
         command += ["--fps", str(args.animation_fps), "--seconds", str(args.animation_seconds)]
+        if args.max_scenes is not None:
+            command += ["--max-scenes", str(args.max_scenes)]
         if args.silent:
             command.append("--silent")
         return renderer, command
