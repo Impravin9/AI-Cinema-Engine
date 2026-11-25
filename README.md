@@ -34,6 +34,29 @@ The realistic renderer uses **free, licence-filtered still images by default**. 
 - Your own images and videos are not automatically assumed to be copyright-safe: only add assets you created or have permission/licence to use.
 - If no acceptable image is found, rendering stops rather than silently downloading a random copyrighted image. Use --allow-cards only if you want a locally designed original graphic as fallback.
 - The renderer applies local crop/resize, colour grading, cinematic movement, captions, transitions, sound effects, music and voiceover with Python/Pillow/FFmpeg.
+
+#### Offline-first asset preparation (recommended)
+
+The engine does **not** search image websites while encoding the final film. It prepares the full image set first and stores it in a persistent folder named after the script and its content hash. If a source website rate-limits or the internet disconnects halfway through, completed scene images and their licence records remain saved. Rerunning the same command resumes the missing scenes; the final render does not begin until every required scene has an image.
+
+1. Prepare the entire image set and stop before video rendering:
+
+```powershell
+python cinema.py myscript.txt output.mp4 --style realistic --plan plan.json --content-style history --prepare-assets-only
+```
+
+2. Open the printed asset folder under assets/ and inspect contact_sheet.jpg. Each image is scene_001.jpg, scene_002.jpg, etc. Replace a scene image with another image you have the right to use if you prefer a different visual. If you replace an image, edit that scene's credit_and_source entry in asset_manifest.json to preserve the correct creator, licence and source URL. Do not claim an image is CC0/CC BY unless its original source confirms it.
+
+3. Once the entire image set is approved, render with no image-site requests:
+
+```powershell
+python cinema.py myscript.txt output.mp4 --style realistic --plan plan.json --content-style history --offline
+```
+
+The same library is automatically reused for future renders of the same script and storyboard. If you change the script or a scene's visual query, the affected scene is marked stale and must be prepared again. To use a different local library location, pass --asset-library D:\\CinemaAssets.
+
+You can also use --offline from the start when you have already populated the scene_NNN.jpg files and manifest. Missing assets cause a clear error; the renderer never silently substitutes a different image mid-film.
+
 - You can add your own properly licensed moving clips in media/videos/scene_001.mp4, scene_002.mp4, etc. Their audio is ignored; the engine mixes its own narration/music/SFX.
 
 Install Python dependencies and FFmpeg:
