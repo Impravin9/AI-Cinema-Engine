@@ -126,7 +126,7 @@ def install() -> None:
                 action = str(actor.get("action") or "auto").lower()
                 if action in {"", "auto"}:
                     actor["action"] = _scene_action(text, role)
-                elif action not in director.E.ONE and action not in {
+                elif action not in {
                     "run", "walk", "idle", "kick", "header", "jump", "celebrate",
                     "cheer", "sad", "shock", "angry", "talk", "point", "fall",
                     "getup", "dive", "shrug", "bow", "wave", "namaste", "dance",
