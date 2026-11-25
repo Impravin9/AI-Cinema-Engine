@@ -101,7 +101,8 @@ def key_linear(obj):
         for key in fc.keyframe_points:
             key.interpolation = "LINEAR"
 
-all_rig_objects = ([root] + [obj for arm in arm_rigs for obj in arm[:2]]\n                   + [obj for leg in leg_rigs for obj in leg[:3]])
+all_rig_objects = ([root] + [obj for arm in arm_rigs for obj in arm[:2]]
+                   + [obj for leg in leg_rigs for obj in leg[:3]])
 '''
 
 ANIMATION_LOOP = r'''
