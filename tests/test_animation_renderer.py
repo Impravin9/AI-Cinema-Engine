@@ -46,14 +46,14 @@ class AnimationRendererTests(unittest.TestCase):
 
 
     def test_environment_upgrade_builds_real_scene_kits(self):
-        for token in ("forest undergrowth", "village hut", "interior table",
+        for token in ("forest undergrowth", "mud plaster hut", "interior table",
                       "river channel", "mountain peak", "battlefield rubble"):
             self.assertIn(token, BLENDER_SOURCE)
         self.assertIn('"interior": []', BLENDER_SOURCE)
         self.assertIn("continuous terrain", BLENDER_SOURCE)
 
     def test_director_detects_indoor_scenes_and_emotion(self):
-        scene = direct_plan([{"text": "Inside the palace, the frightened guard kneels."}])[0]
+        scene = direct_plan([{"text": "Inside the palace, the afraid guard kneels."}])[0]
         self.assertEqual(scene["environment"], "interior")
         self.assertEqual(scene["mood"], "fear")
         self.assertEqual(scene["action"], "fall")
