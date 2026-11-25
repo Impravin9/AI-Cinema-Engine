@@ -5,6 +5,7 @@ import argparse, json, os, shutil, subprocess, sys, tempfile, re
 from pathlib import Path
 
 from cinematic_director import direct_plan
+from cinematic_rig import upgrade_blender_source
 
 def split_script(text):
     parts = [x.strip() for x in re.split(r'(?<=[.!?])\s+', text) if x.strip()]
@@ -179,6 +180,9 @@ s.render.image_settings.color_mode="RGB"
 bpy.ops.wm.save_as_mainfile(filepath=output+".blend")
 bpy.ops.render.render(animation=True)
 '''
+
+BLENDER_SOURCE = upgrade_blender_source(BLENDER_SOURCE)
+
 
 def main():
     p=argparse.ArgumentParser(description="Fully local procedural 3D animation renderer (no image websites or online assets).")
