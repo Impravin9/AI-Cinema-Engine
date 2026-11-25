@@ -578,7 +578,8 @@ def main():
             scene_record = asset_manifest["scenes"][str(asset_i + 1)]
             existing_candidates = list(scene_record.get("candidates") or [])
         saved = valid_scene_asset(library_dir, asset_manifest, asset_i, asset_scene)
-        if saved and len(existing_candidates) >= a.candidates_per_scene:
+        local_only = any(str(x.get("credit_and_source", "")).startswith("local file ") for x in existing_candidates)
+        if saved and (len(existing_candidates) >= a.candidates_per_scene or local_only):
             asset_path, record = saved
             try:
                 prepared_assets[asset_i] = (Image.open(asset_path).convert('RGB'), record.get('credit_and_source', 'Local project asset'))
@@ -596,7 +597,13 @@ def main():
         try:
             candidates = existing_candidates
             start_number = len(candidates) + 1
-            fresh = fetch_candidates(asset_i, asset_scene, a, style, used, a.candidates_per_scene - len(candidates))
+            try:
+                fresh = fetch_candidates(asset_i, asset_scene, a, style, used, a.candidates_per_scene - len(candidates))
+            except RuntimeError:
+                if candidates:
+                    fresh = []
+                else:
+                    raise
             for candidate in fresh:
                 candidate_number = start_number
                 candidate["id"] = f"c{candidate_number:02d}"
@@ -651,8 +658,7 @@ def main():
             sheet.paste(tile, ((tile_i % cols) * 340, (tile_i // cols) * 220))
         sheet.save(library_dir / 'contact_sheet.jpg', quality=88)
     template_path = library_dir / 'asset_selections.example.json'
-    if not template_path.exists():
-        template_path.write_text(json.dumps(selection_template, indent=2), encoding='utf-8')
+    template_path.write_text(json.dumps(selection_template, indent=2), encoding='utf-8')
     if a.prepare_assets_only:
         print(f'ASSETS READY/RESUMABLE: {library_dir}\\nReview contact_sheet.jpg. Copy asset_selections.example.json to asset_selections.json and change scene values to candidate IDs (for example c02), then rerun with --offline.')
         return
