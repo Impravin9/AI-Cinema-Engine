@@ -119,8 +119,10 @@ def direct_plan(scenes: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Direct a complete ordered sequence while preserving all explicit user choices."""
     directed = [direct_scene(scene, index) for index, scene in enumerate(scenes)]
     for index, scene in enumerate(directed):
-        if index and scene.get("environment") != directed[index - 1].get("environment"):
-            scene.setdefault("transition", "establishing_cut")
+        explicit_transition = "transition" in scenes[index]
+        if (index and not explicit_transition
+                and scene.get("environment") != directed[index - 1].get("environment")):
+            scene["transition"] = "establishing_cut"
         if scene.get("action") in ("fight", "run"):
             scene.setdefault("pace", "fast")
         scene.setdefault("coverage_role", "establishing" if index == 0 else "story_beat")
