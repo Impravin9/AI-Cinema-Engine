@@ -212,6 +212,8 @@ smoke_mat = mat("smoke volume tint",(.20,.22,.23),0,1)
 for i in range(7):
     puff=uv("smoke plume",(2.5+i*.11,2.0,1.0+i*.42),
             (.42+i*.045,.38+i*.045,.48+i*.07),smoke_mat)
+    puff["base_location"] = list(puff.location)
+    puff["base_scale"] = list(puff.scale)
     env_add("smoke",puff)
 
 # Atmospheric world fill plus a broad sun key: useful even in wide establishing shots.
