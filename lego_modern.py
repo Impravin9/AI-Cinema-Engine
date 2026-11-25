@@ -18,6 +18,7 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFilter, ImageEnhance
 import lego_boost as B
 from realistic_director import prepare_plan
+from video_generation import generate_video, camera_motion
 A = B.A; E = B.E
 clamp = lambda v, a, b: max(a, min(b, v))
 SR = E.SR
@@ -522,9 +523,13 @@ def select_video_encoder(requested):
 
 def main():
     ap = argparse.ArgumentParser(); ap.add_argument('script'); ap.add_argument('out', nargs='?', default='modern.mp4'); ap.add_argument('--plan'); ap.add_argument('--prompt-only', action='store_true'); ap.add_argument('--voice', default='en-US-AndrewMultilingualNeural'); ap.add_argument('--rate', default='+0%')
-    ap.add_argument('--source', default='auto', choices=['auto', 'photo', 'gen']); ap.add_argument('--media', default='media'); ap.add_argument('--video-dir', default='media/videos', help='Optional generated scene clips: scene_001.mp4, scene_002.mp4, etc.'); ap.add_argument('--music', default='music'); ap.add_argument('--preview', action='store_true'); ap.add_argument('--silent', action='store_true'); ap.add_argument('--endcard', action='store_true')
+    ap.add_argument('--source', default='auto', choices=['auto', 'photo', 'gen']); ap.add_argument('--media', default='media'); ap.add_argument('--video-dir', default='media/videos', help='Optional generated scene clips: scene_001.mp4, scene_002.mp4, etc.'); ap.add_argument('--generate-video', action='store_true', help='Generate moving scene clips with Replicate LTX 2.3 Fast (paid API).'); ap.add_argument('--video-max-scenes', type=int, default=5, help='Maximum clips to generate per run; 0 means all scenes.'); ap.add_argument('--video-duration', type=int, choices=[6, 8, 10, 12, 14, 16, 18, 20], default=6, help='Duration per generated clip in seconds.'); ap.add_argument('--music', default='music'); ap.add_argument('--preview', action='store_true'); ap.add_argument('--silent', action='store_true'); ap.add_argument('--endcard', action='store_true')
     ap.add_argument('--style', default=None); ap.add_argument('--provider', default='auto'); ap.add_argument('--model', default=os.environ.get('LEGO_MODEL')); ap.add_argument('--nomusic', action='store_true'); ap.add_argument('--musicvol', type=float, default=.55); ap.add_argument('--cache', default='cache'); ap.add_argument('--save-plan', default='modern_plan.json'); ap.add_argument('--allow-cards', action='store_true', help='Allow designed text cards when no visual provider succeeds.'); ap.add_argument('--encoder', choices=['auto', 'libx264', 'h264_qsv'], default='auto'); ap.add_argument('--resolution', choices=['720p', '1080p'], default='1080p'); a = ap.parse_args()
     script = open(a.script, encoding='utf-8').read()
+    if a.generate_video and not os.environ.get('REPLICATE_API_TOKEN'):
+        raise SystemExit('Set REPLICATE_API_TOKEN before using --generate-video. This feature uses paid Replicate GPU inference.')
+    if a.video_max_scenes < 0:
+        raise SystemExit('--video-max-scenes must be zero (all scenes) or a positive integer.')
     if a.prompt_only: open('modern_prompt.txt', 'w', encoding='utf-8').write(SYSTEM + '\n\nSCRIPT:\n' + script); return print('Wrote modern_prompt.txt -> paste into Claude.ai, save the JSON reply as modern_plan.json, run with --plan modern_plan.json')
     if shutil.which('ffmpeg') is None: raise SystemExit('ffmpeg not in PATH (winget install ffmpeg)')
     if a.plan: plan = json.load(open(a.plan, encoding='utf-8'))
@@ -535,16 +540,36 @@ def main():
     plan = prepare_plan(plan, script, a.style)
     plan = adapt(plan, a.style); style = plan['style']; W, H, FPS = (640, 360, 12) if a.preview else ((1920, 1080, 24) if a.resolution == '1080p' else (1280, 720, 24)); os.makedirs(a.cache, exist_ok=True); net_check() if a.source != 'gen' else None; used = set(); scenes = []; credits = []
     rate = {'tense': '-4%', 'sad': '-6%', 'calm': '-2%', 'epic': '+0%', 'up': '+5%'}; tts = None if a.silent else tts_scene(a, rate); t0 = 0.0
+    generated_video_count = 0
     for i, s in enumerate(plan['scenes']):
         print(f'scene {i + 1}/{len(plan["scenes"])}: {s["text"][:60]}', flush=True)
         video_path = locate_scene_video(i, a.video_dir)
-        video_frames = extract_scene_video(video_path, a.cache, W, H, FPS) if video_path else None
-        if video_frames:
+        video_frames = None
+        if video_path:
+            video_frames = extract_scene_video(video_path, a.cache, W, H, FPS)
             im = Image.open(video_frames[0]).convert('RGB')
-            cr = 'Local generated video clip | ' + os.path.abspath(video_path)
+            cr = 'Local moving footage | ' + os.path.abspath(video_path)
             print('   -> moving footage:', os.path.basename(video_path), flush=True)
         else:
             im, cr = fetch(i, s, a, style, used, a.cache)
+            if a.generate_video and (a.video_max_scenes == 0 or generated_video_count < a.video_max_scenes):
+                video_path = os.path.join(a.video_dir, f'scene_{i + 1:03d}.mp4')
+                video_prompt = (
+                    "A continuous photorealistic live-action documentary shot. "
+                    + s['gen_prompt']
+                    + " Animate the exact action described here as physically believable continuous motion: "
+                    + s['text']
+                    + " Natural human movement, realistic weight and inertia, coherent environment, "
+                      "stable subject identity, no jump cuts, no text, no subtitles, no watermark."
+                )
+                print('   -> generating moving footage with LTX 2.3 Fast (Replicate)...', flush=True)
+                generate_video(
+                    video_prompt, im, video_path, duration=a.video_duration,
+                    camera=camera_motion(s.get('camera_direction'))
+                )
+                generated_video_count += 1
+                video_frames = extract_scene_video(video_path, a.cache, W, H, FPS)
+                cr = 'AI-generated moving video | LTX 2.3 Fast / Replicate | starting visual: ' + cr
             print('   ->', cr.split(' | ')[0], flush=True)
         credits.append(f'{i + 1}. {cr}')
         wav, vd = (tts(s['text'], i, s['mood']) if tts else (None, max(2.8, len(s['text'].split()) / 2.6)))
