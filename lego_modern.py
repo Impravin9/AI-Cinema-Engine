@@ -18,7 +18,6 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFilter, ImageEnhance
 import lego_boost as B
 from realistic_director import prepare_plan
-from video_generation import generate_video, camera_motion
 A = B.A; E = B.E
 clamp = lambda v, a, b: max(a, min(b, v))
 SR = E.SR
@@ -144,7 +143,12 @@ def net_check():
     try: http('https://commons.wikimedia.org/w/api.php?action=query&meta=siteinfo&format=json', timeout=15, tries=1); print('network: Wikimedia OK', flush=True)
     except Exception as e: Net.off.add('commons'); print(f'network: Wikimedia unreachable -> {why(e)}\n  continuing with local media/ + AI images + designed cards (nothing will crash)', flush=True)
 def strip_html(s): return re.sub(r'<[^>]+>', '', s or '').strip()[:80]
-def lic_ok(l): l = (l or '').lower(); return any(k in l for k in OK_LIC) and 'nc' not in l.replace('unc', '').split() and '-nc' not in l and ' nc' not in l and '-nd' not in l
+def lic_ok(license_name):
+    """Allow public domain, CC0 and CC BY only; exclude NC, ND and SA."""
+    value = re.sub(r"\s+", " ", (license_name or "").strip().lower())
+    if value in {"public domain", "public domain mark", "pdm", "cc0", "cc0 1.0"}:
+        return True
+    return re.fullmatch(r"cc[- ]by(?:[- ]?\d+(?:\.\d+)?)?", value) is not None
 def src_local(i, d):
     for ext in ('jpg', 'jpeg', 'png', 'webp'):
         p = os.path.join(d, f'{i + 1}.{ext}')
@@ -165,6 +169,58 @@ def src_commons(qs, used):
         except Exception as e:
             Net.bad('commons', e)
             if not Net.ok('commons'): return
+def src_openverse(qs, used):
+    """Search Openverse for CC0, PDM and CC BY landscape images."""
+    if not Net.ok('openverse'):
+        return
+    for q in qs:
+        try:
+            params = {
+                'q': q, 'license': 'cc0,pdm,by',
+                'license_type': 'commercial,modification',
+                'extension': 'jpg,jpeg,png', 'aspect_ratio': 'wide',
+                'size': 'large', 'page_size': 20, 'mature': 'false',
+                'filter_dead': 'true',
+            }
+            endpoint = 'https://api.openverse.org/v1/images/?' + urllib.parse.urlencode(params)
+            results = json.loads(http(endpoint, timeout=25)).get('results', [])
+            Net.good('openverse')
+            for item in results:
+                lic = str(item.get('license') or '').lower()
+                if lic not in {'cc0', 'pdm', 'by'}:
+                    continue
+                if int(item.get('width') or 0) < 1000 or int(item.get('height') or 0) < 500:
+                    continue
+                source_url = item.get('url') or item.get('thumbnail')
+                if not source_url or source_url in used:
+                    continue
+                try:
+                    im = Image.open(io.BytesIO(http(source_url, timeout=40)))
+                except Exception:
+                    thumb = item.get('thumbnail')
+                    if not thumb or thumb == source_url:
+                        continue
+                    try:
+                        im = Image.open(io.BytesIO(http(thumb, timeout=40)))
+                    except Exception as e:
+                        Net.bad('openverse', e)
+                        continue
+                used.add(source_url)
+                title = strip_html(item.get('title') or 'Untitled')
+                creator = strip_html(item.get('creator') or 'Creator not stated')
+                licence = f"CC {lic.upper()} {item.get('license_version') or ''}".strip()
+                credit = (
+                    f"Openverse | title: {title} | creator: {creator} | "
+                    f"licence: {licence} | licence terms: {item.get('license_url') or ''} | "
+                    f"original source: {item.get('foreign_landing_url') or ''} | "
+                    f"creator page: {item.get('creator_url') or ''}"
+                )
+                return im, credit
+        except Exception as e:
+            Net.bad('openverse', e)
+            if not Net.ok('openverse'):
+                return
+
 def src_pexels(qs, used):
     k = os.environ.get('PEXELS_API_KEY')
     if not k: return
@@ -243,40 +299,36 @@ def card(text, acc, W=1920, H=1080):
     for j, l in enumerate(lines[:4]): d.text((W // 2, H // 2 + (j - len(lines[:4]) / 2 + .5) * 110), l, font=f, fill=(240, 240, 245), anchor='mm')
     return im
 def fetch(i, s, a, style, used, cache):
-    key = hashlib.md5((str(i) + str(s['queries']) + s['gen_prompt'] + s['visual'] + a.source).encode()).hexdigest()[:12]; cp = os.path.join(cache, key + '.jpg'); mp = cp + '.txt'
+    """Resolve a scene using local assets and openly licensed still images only."""
+    key = hashlib.md5((str(i) + str(s.get('queries')) + s.get('gen_prompt', '') + str(a.source)).encode()).hexdigest()[:12]
+    cp = os.path.join(cache, key + '.jpg')
+    mp = cp + '.txt'
     if os.path.exists(cp):
-        cached_credit = open(mp, encoding='utf-8').read() if os.path.exists(mp) else 'cached'
+        cached_credit = open(mp, encoding='utf-8').read() if os.path.exists(mp) else 'cached asset; verify provenance'
         if a.allow_cards or not cached_credit.startswith('designed card'):
             return Image.open(cp).convert('RGB'), cached_credit
-    r = src_local(i, a.media); gp = s['gen_prompt']
-    character_refs = []
-    if not r and a.source != 'photo':
-        for character in (s.get('named_characters') or []):
-            ref = character_reference({'name': character}, cache)
-            if ref:
-                character_refs.append(ref)
-    if character_refs:
-        gp += " Maintain the exact identity, facial features, age and hairstyle from the supplied character reference image(s)."
-    if a.source == 'gen':
-        order = ['gen']
-    elif a.source == 'photo':
-        order = ['photo']
+
+    local = src_local(i, a.media)
+    if local:
+        result = (local[0], f"LOCAL USER ASSET | path: {os.path.abspath(os.path.join(a.media, str(i + 1)))} | rights: user must confirm ownership or licence")
     else:
-        order = ['photo', 'gen'] if s['visual'] == 'photo' else ['gen', 'photo']
-    for kind in order:
-        if r: break
-        r = (src_commons(s['queries'], used) or src_pexels(s['queries'], used)) if kind == 'photo' else (src_gemini(gp, character_refs) or src_pollinations(gp, i * 7 + 3))
-    if not r and a.generate_video:
-        return None, 'text-to-video generation (no still reference)'
-    if not r:
+        queries = s.get('queries') or [s.get('text', '')[:100]]
+        result = src_commons(queries, used) or src_openverse(queries, used)
+
+    if not result:
         if not a.allow_cards:
             raise RuntimeError(
-                f"No usable visual found for scene {i + 1}: {s['text'][:100]!r}. "
-                "Set GEMINI_API_KEY or PEXELS_API_KEY, add a local media/<scene-number>.jpg, "
-                "or explicitly use --allow-cards to accept a text-card fallback."
+                f"No licence-approved image found for scene {i + 1}: {s['text'][:100]!r}. "
+                "Add a properly licensed image to media/<scene-number>.jpg, "
+                "or rerun with --allow-cards to use an original locally designed card. "
+                "Paid image APIs are not used by this free-assets workflow."
             )
-        r = (card(re.sub(r'\s+', ' ', s['text'])[:90], ACC.get(style, ACC['history'])), 'designed card')
-    im = r[0].convert('RGB'); im.save(cp, quality=93); open(mp, 'w').write(r[1]); return im, r[1]
+        result = (card(re.sub(r'\s+', ' ', s['text'])[:90], ACC.get(style, ACC['history'])), 'designed card | original local graphic')
+    im = result[0].convert('RGB')
+    im.save(cp, quality=93)
+    with open(mp, 'w', encoding='utf-8') as handle:
+        handle.write(result[1])
+    return im, result[1]
 def locate_scene_video(index, folder):
     """Find an optional moving scene clip using a predictable 1-based filename."""
     names = (f"scene_{index + 1:03d}.mp4", f"scene_{index + 1}.mp4",
@@ -525,13 +577,9 @@ def select_video_encoder(requested):
 
 def main():
     ap = argparse.ArgumentParser(); ap.add_argument('script'); ap.add_argument('out', nargs='?', default='modern.mp4'); ap.add_argument('--plan'); ap.add_argument('--prompt-only', action='store_true'); ap.add_argument('--voice', default='en-US-AndrewMultilingualNeural'); ap.add_argument('--rate', default='+0%')
-    ap.add_argument('--source', default='auto', choices=['auto', 'photo', 'gen']); ap.add_argument('--media', default='media'); ap.add_argument('--video-dir', default='media/videos', help='Optional generated scene clips: scene_001.mp4, scene_002.mp4, etc.'); ap.add_argument('--generate-video', action='store_true', help='Generate moving scene clips with Replicate LTX 2.3 Fast (paid API).'); ap.add_argument('--video-max-scenes', type=int, default=5, help='Maximum clips to generate per run; 0 means all scenes.'); ap.add_argument('--video-duration', type=int, choices=[6, 8, 10, 12, 14, 16, 18, 20], default=6, help='Duration per generated clip in seconds.'); ap.add_argument('--music', default='music'); ap.add_argument('--preview', action='store_true'); ap.add_argument('--silent', action='store_true'); ap.add_argument('--endcard', action='store_true')
+    ap.add_argument('--source', default='auto', choices=['auto', 'photo', 'gen'], help='Compatibility flag; downloaded stills always use free, licence-filtered sources.'); ap.add_argument('--media', default='media'); ap.add_argument('--video-dir', default='media/videos', help='Optional user-supplied moving clips: scene_001.mp4, scene_002.mp4, etc.'); ap.add_argument('--music', default='music'); ap.add_argument('--preview', action='store_true'); ap.add_argument('--silent', action='store_true'); ap.add_argument('--endcard', action='store_true')
     ap.add_argument('--style', default=None); ap.add_argument('--provider', default='auto'); ap.add_argument('--model', default=os.environ.get('LEGO_MODEL')); ap.add_argument('--nomusic', action='store_true'); ap.add_argument('--musicvol', type=float, default=.55); ap.add_argument('--cache', default='cache'); ap.add_argument('--save-plan', default='modern_plan.json'); ap.add_argument('--allow-cards', action='store_true', help='Allow designed text cards when no visual provider succeeds.'); ap.add_argument('--encoder', choices=['auto', 'libx264', 'h264_qsv'], default='auto'); ap.add_argument('--resolution', choices=['720p', '1080p'], default='1080p'); a = ap.parse_args()
     script = open(a.script, encoding='utf-8').read()
-    if a.generate_video and not os.environ.get('REPLICATE_API_TOKEN'):
-        raise SystemExit('Set REPLICATE_API_TOKEN before using --generate-video. This feature uses paid Replicate GPU inference.')
-    if a.video_max_scenes < 0:
-        raise SystemExit('--video-max-scenes must be zero (all scenes) or a positive integer.')
     if a.prompt_only: open('modern_prompt.txt', 'w', encoding='utf-8').write(SYSTEM + '\n\nSCRIPT:\n' + script); return print('Wrote modern_prompt.txt -> paste into Claude.ai, save the JSON reply as modern_plan.json, run with --plan modern_plan.json')
     if shutil.which('ffmpeg') is None: raise SystemExit('ffmpeg not in PATH (winget install ffmpeg)')
     if a.plan: plan = json.load(open(a.plan, encoding='utf-8'))
@@ -540,9 +588,8 @@ def main():
         if not plan: raise SystemExit('No LLM key (ANTHROPIC_API_KEY / GEMINI_API_KEY / GROQ_API_KEY). Use --prompt-only, paste the prompt into Claude.ai and re-run with --plan modern_plan.json')
         json.dump(plan, open(a.save_plan, 'w', encoding='utf-8'), indent=1); print('plan saved', a.save_plan, flush=True)
     plan = prepare_plan(plan, script, a.style)
-    plan = adapt(plan, a.style); style = plan['style']; W, H, FPS = (640, 360, 12) if a.preview else ((1920, 1080, 24) if a.resolution == '1080p' else (1280, 720, 24)); os.makedirs(a.cache, exist_ok=True); net_check() if a.source != 'gen' else None; used = set(); scenes = []; credits = []
+    plan = adapt(plan, a.style); style = plan['style']; W, H, FPS = (640, 360, 12) if a.preview else ((1920, 1080, 24) if a.resolution == '1080p' else (1280, 720, 24)); os.makedirs(a.cache, exist_ok=True); net_check(); used = set(); scenes = []; credits = []
     rate = {'tense': '-4%', 'sad': '-6%', 'calm': '-2%', 'epic': '+0%', 'up': '+5%'}; tts = None if a.silent else tts_scene(a, rate); t0 = 0.0
-    generated_video_count = 0
     for i, s in enumerate(plan['scenes']):
         print(f'scene {i + 1}/{len(plan["scenes"])}: {s["text"][:60]}', flush=True)
         video_path = locate_scene_video(i, a.video_dir)
@@ -554,27 +601,6 @@ def main():
             print('   -> moving footage:', os.path.basename(video_path), flush=True)
         else:
             im, cr = fetch(i, s, a, style, used, a.cache)
-            if a.generate_video and (a.video_max_scenes == 0 or generated_video_count < a.video_max_scenes):
-                video_path = os.path.join(a.video_dir, f'scene_{i + 1:03d}.mp4')
-                video_prompt = (
-                    s['gen_prompt'].replace(
-                        "Create one coherent photorealistic cinematic film frame, not an illustration, not LEGO, not a collage.",
-                        "A continuous photorealistic live-action documentary shot."
-                    )
-                    + " Animate the exact action described here as physically believable continuous motion: "
-                    + s['text']
-                    + " Natural human movement, realistic weight and inertia, coherent environment, "
-                      "stable subject identity, no jump cuts, no text, no subtitles, no watermark."
-                )
-                print('   -> generating moving footage with LTX 2.3 Fast (Replicate)...', flush=True)
-                generate_video(
-                    video_prompt, im, video_path, duration=a.video_duration,
-                    camera=camera_motion(s.get('camera_direction'))
-                )
-                generated_video_count += 1
-                video_frames = extract_scene_video(video_path, a.cache, W, H, FPS)
-                im = Image.open(video_frames[0]).convert('RGB')
-                cr = 'AI-generated moving video | LTX 2.3 Fast / Replicate | starting visual: ' + cr
             print('   ->', cr.split(' | ')[0], flush=True)
         credits.append(f'{i + 1}. {cr}')
         wav, vd = (tts(s['text'], i, s['mood']) if tts else (None, max(2.8, len(s['text'].split()) / 2.6)))
@@ -604,7 +630,8 @@ def main():
         raise SystemExit(f"FFmpeg encoding failed with exit code {return_code}. Check the FFmpeg/Intel driver output above.")
     base = a.out.rsplit('.', 1)[0]
     open(base + '_credits.txt', 'w', encoding='utf-8').write('VISUAL CREDITS (paste in YouTube description)\n' + '\n'.join(credits) + '\n')
+    json.dump([{'scene': i + 1, 'credit_and_provenance': item} for i, item in enumerate(credits)], open(base + '_assets.json', 'w', encoding='utf-8'), ensure_ascii=False, indent=2)
     ch = [(sc['t0'], sc['chapter']) for sc in scenes if sc.get('chapter')] or [(0, plan['title'])]; mm = lambda x: f'{int(x // 60)}:{int(x % 60):02d}'
     open(base + '_pack.txt', 'w', encoding='utf-8').write(f"TITLE: {plan['title']}\n\nCHAPTERS\n0:00 Intro\n" + '\n'.join(f'{mm(t)} {c}' for t, c in ch if t > 0) + '\n')
-    print('DONE', a.out, '| credits:', base + '_credits.txt')
+    print('DONE', a.out, '| credits:', base + '_credits.txt', '| asset manifest:', base + '_assets.json')
 if __name__ == '__main__': main()
