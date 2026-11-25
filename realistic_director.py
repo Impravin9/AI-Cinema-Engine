@@ -183,9 +183,15 @@ def prepare_plan(plan: dict[str, Any], script: str, requested_style: str | None 
             name = str(actor.get("name") or "").strip()
             if not name:
                 continue
-            if _generic_group(name) or _script_mentions(name, script_norm):
+            if _generic_group(name) or _script_mentions(name, _norm(text)):
                 verified_actors.append(actor)
         scene["actors"] = verified_actors
+        scene["named_characters"] = [
+            str(character.get("name"))
+            for character in cast
+            if _script_mentions(str(character.get("name") or ""), _norm(text))
+            and not _generic_group(str(character.get("name") or ""))
+        ]
 
         queries = _queries(text, script, title)
         scene["queries"] = queries
