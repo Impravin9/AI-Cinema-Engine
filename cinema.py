@@ -57,6 +57,9 @@ def build_parser() -> argparse.ArgumentParser:
                         help="Narration voice in realistic mode.")
     parser.add_argument("--rate", default="+0%", help="Narration speed in realistic mode.")
     parser.add_argument("--preview", action="store_true", help="Render realistic mode at 640x360 / 12 fps.")
+    parser.add_argument("--resolution", choices=("720p", "1080p"), default="1080p", help="Realistic output resolution.")
+    parser.add_argument("--encoder", choices=("auto", "libx264", "h264_qsv"), default="auto", help="Intel Quick Sync when available; otherwise CPU encoding.")
+    parser.add_argument("--allow-cards", action="store_true", help="Permit text-card fallback if all visual sources fail.")
     parser.add_argument("--endcard", action="store_true", help="Add an end card in realistic mode.")
     parser.add_argument("--nomusic", action="store_true", help="Disable the generated music bed.")
     parser.add_argument("--musicvol", type=float, default=0.55, help="Music bed volume.")
@@ -129,6 +132,11 @@ def build_renderer_args(args: argparse.Namespace) -> tuple[str, list[str]]:
         command += ["--style", args.content_style]
     if args.preview:
         command.append("--preview")
+    else:
+        command += ["--resolution", args.resolution]
+    command += ["--encoder", args.encoder]
+    if args.allow_cards:
+        command.append("--allow-cards")
     if args.silent:
         command.append("--silent")
     if args.endcard:
