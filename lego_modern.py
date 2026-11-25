@@ -283,7 +283,7 @@ def fetch_candidates(i, s, a, style, used, limit):
                            "credit_and_source": credit})
     if not candidates and a.allow_cards:
         candidates.append({"id": "c01",
-                           "image": card(re.sub(r"\\s+", " ", s["text"])[:90], ACC.get(style, ACC["history"])),
+                           "image": card(re.sub(r"\s+", " ", s["text"])[:90], ACC.get(style, ACC["history"])),
                            "credit_and_source": "designed card | original local graphic"})
     if not candidates:
         raise RuntimeError(
