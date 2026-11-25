@@ -19,6 +19,7 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFilter, ImageEnhance
 import lego_boost as B
 from asset_licensing import lic_ok
+from asset_library import open_library, save_manifest, scene_asset_path, valid_scene_asset, register_scene_asset
 from realistic_director import prepare_plan
 A = B.A; E = B.E
 clamp = lambda v, a, b: max(a, min(b, v))
@@ -512,7 +513,7 @@ def select_video_encoder(requested):
 def main():
     ap = argparse.ArgumentParser(); ap.add_argument('script'); ap.add_argument('out', nargs='?', default='modern.mp4'); ap.add_argument('--plan'); ap.add_argument('--prompt-only', action='store_true'); ap.add_argument('--voice', default='en-US-AndrewMultilingualNeural'); ap.add_argument('--rate', default='+0%')
     ap.add_argument('--source', default='auto', choices=['auto', 'photo', 'gen'], help='Compatibility flag; downloaded stills always use free, licence-filtered sources.'); ap.add_argument('--media', default='media'); ap.add_argument('--video-dir', default='media/videos', help='Optional user-supplied moving clips: scene_001.mp4, scene_002.mp4, etc.'); ap.add_argument('--music', default='music'); ap.add_argument('--preview', action='store_true'); ap.add_argument('--silent', action='store_true'); ap.add_argument('--endcard', action='store_true')
-    ap.add_argument('--style', default=None); ap.add_argument('--provider', default='auto'); ap.add_argument('--model', default=os.environ.get('LEGO_MODEL')); ap.add_argument('--nomusic', action='store_true'); ap.add_argument('--musicvol', type=float, default=.55); ap.add_argument('--cache', default='cache'); ap.add_argument('--save-plan', default='modern_plan.json'); ap.add_argument('--allow-cards', action='store_true', help='Allow designed text cards when no visual provider succeeds.'); ap.add_argument('--encoder', choices=['auto', 'libx264', 'h264_qsv'], default='auto'); ap.add_argument('--resolution', choices=['720p', '1080p'], default='1080p'); a = ap.parse_args()
+    ap.add_argument('--style', default=None); ap.add_argument('--provider', default='auto'); ap.add_argument('--model', default=os.environ.get('LEGO_MODEL')); ap.add_argument('--nomusic', action='store_true'); ap.add_argument('--musicvol', type=float, default=.55); ap.add_argument('--cache', default='cache'); ap.add_argument('--asset-library', default='assets', help='Persistent per-script local image library.'); ap.add_argument('--offline', action='store_true', help='Never contact image websites; require a complete local asset library.'); ap.add_argument('--prepare-assets-only', action='store_true', help='Download/cache every scene image, create a contact sheet, then stop before rendering.'); ap.add_argument('--save-plan', default='modern_plan.json'); ap.add_argument('--allow-cards', action='store_true', help='Allow designed text cards when no visual provider succeeds.'); ap.add_argument('--encoder', choices=['auto', 'libx264', 'h264_qsv'], default='auto'); ap.add_argument('--resolution', choices=['720p', '1080p'], default='1080p'); a = ap.parse_args()
     script = open(a.script, encoding='utf-8').read()
     if a.prompt_only: open('modern_prompt.txt', 'w', encoding='utf-8').write(SYSTEM + '\n\nSCRIPT:\n' + script); return print('Wrote modern_prompt.txt -> paste into Claude.ai, save the JSON reply as modern_plan.json, run with --plan modern_plan.json')
     if shutil.which('ffmpeg') is None: raise SystemExit('ffmpeg not in PATH (winget install ffmpeg)')
@@ -522,7 +523,53 @@ def main():
         if not plan: raise SystemExit('No planning provider available. For a no-paid-service workflow, start local Ollama and rerun with --provider ollama, or supply an existing storyboard with --plan modern_plan.json.')
         json.dump(plan, open(a.save_plan, 'w', encoding='utf-8'), indent=1); print('plan saved', a.save_plan, flush=True)
     plan = prepare_plan(plan, script, a.style)
-    plan = adapt(plan, a.style); style = plan['style']; W, H, FPS = (640, 360, 12) if a.preview else ((1920, 1080, 24) if a.resolution == '1080p' else (1280, 720, 24)); os.makedirs(a.cache, exist_ok=True); net_check(); used = set(); scenes = []; credits = []
+    plan = adapt(plan, a.style); style = plan['style']; W, H, FPS = (640, 360, 12) if a.preview else ((1920, 1080, 24) if a.resolution == '1080p' else (1280, 720, 24)); os.makedirs(a.cache, exist_ok=True); used = set(); scenes = []; credits = []
+    library_dir, asset_manifest = open_library(a.asset_library, a.script, script)
+    prepared_assets = {}
+    if not a.offline:
+        net_check()
+    print(f'asset library: {library_dir} | offline={a.offline}', flush=True)
+    # Preflight every scene before TTS or video rendering. A partial download is saved
+    # scene-by-scene so a later run resumes without re-downloading completed scenes.
+    for asset_i, asset_scene in enumerate(plan['scenes']):
+        if locate_scene_video(asset_i, a.video_dir):
+            continue
+        saved = valid_scene_asset(library_dir, asset_manifest, asset_i, asset_scene)
+        if saved:
+            asset_path, record = saved
+            try:
+                prepared_assets[asset_i] = (Image.open(asset_path).convert('RGB'), record.get('credit_and_source', 'Local project asset'))
+                print(f'asset {asset_i + 1}/{len(plan[\'scenes\'])}: reused local library', flush=True)
+                continue
+            except Exception:
+                pass
+        if a.offline:
+            raise SystemExit(f'Missing scene asset {asset_i + 1}. Offline mode will not download. Add a licensed image as {scene_asset_path(library_dir, asset_i)} or run once without --offline to resume downloads.')
+        try:
+            image, credit = fetch(asset_i, asset_scene, a, style, used, a.cache)
+            target = scene_asset_path(library_dir, asset_i)
+            image.convert('RGB').save(target, quality=94)
+            register_scene_asset(library_dir, asset_manifest, asset_i, asset_scene, credit)
+            prepared_assets[asset_i] = (Image.open(target).convert('RGB'), credit)
+            print(f'asset {asset_i + 1}/{len(plan[\'scenes\'])}: saved locally', flush=True)
+        except Exception as exc:
+            save_manifest(library_dir, asset_manifest)
+            raise SystemExit(f'Asset preparation stopped at scene {asset_i + 1}/{len(plan[\'scenes\'])}: {exc}\\nCompleted scene assets are saved in {library_dir}. Run the same command later to resume; completed scenes will not be downloaded again.')
+    # Contact sheet lets the creator visually review the complete asset set before editing.
+    thumbs = []
+    for asset_i, (asset_image, _) in prepared_assets.items():
+        thumb = asset_image.copy(); thumb.thumbnail((320, 180))
+        tile = Image.new('RGB', (340, 220), (24, 28, 38)); tile.paste(thumb, ((340-thumb.width)//2, 8))
+        ImageDraw.Draw(tile).text((12, 192), f'SCENE {asset_i + 1:03d}', fill=(245,245,245))
+        thumbs.append(tile)
+    if thumbs:
+        cols = 3; rows = (len(thumbs) + cols - 1) // cols
+        sheet = Image.new('RGB', (cols * 340, rows * 220), (12, 14, 20))
+        for tile_i, tile in enumerate(thumbs): sheet.paste(tile, ((tile_i % cols) * 340, (tile_i // cols) * 220))
+        sheet.save(library_dir / 'contact_sheet.jpg', quality=88)
+    if a.prepare_assets_only:
+        print(f'ASSETS READY/RESUMABLE: {library_dir}\\nReview contact_sheet.jpg, replace scene_NNN.jpg with your selected licensed images if needed, then render with --offline.')
+        return
     rate = {'tense': '-4%', 'sad': '-6%', 'calm': '-2%', 'epic': '+0%', 'up': '+5%'}; tts = None if a.silent else tts_scene(a, rate); t0 = 0.0
     for i, s in enumerate(plan['scenes']):
         print(f'scene {i + 1}/{len(plan["scenes"])}: {s["text"][:60]}', flush=True)
@@ -534,7 +581,7 @@ def main():
             cr = 'USER-SUPPLIED MOVING FOOTAGE | ' + os.path.abspath(video_path) + ' | rights: user must confirm ownership or licence'
             print('   -> moving footage:', os.path.basename(video_path), flush=True)
         else:
-            im, cr = fetch(i, s, a, style, used, a.cache)
+            im, cr = prepared_assets[i]
             print('   ->', cr.split(' | ')[0], flush=True)
         credits.append(f'{i + 1}. {cr}')
         wav, vd = (tts(s['text'], i, s['mood']) if tts else (None, max(2.8, len(s['text'].split()) / 2.6)))
