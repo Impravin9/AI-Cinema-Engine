@@ -30,11 +30,9 @@ def _words(value: str) -> list[str]:
 
 def _is_group(name: str, role: str | None) -> bool:
     words = set(_words(name))
-    return bool(words & _GROUP_TERMS) or (role or "").lower() in {
-        "soldier", "civilian", "pilot", "sailor", "commander", "general",
-        "king", "queen", "minister", "president", "doctor", "nurse",
-        "scientist", "reporter", "journalist", "villager", "police"
-    }
+    # A named person may have a role such as "president" or "general".
+    # Role alone must never whitelist an otherwise unmentioned real person.
+    return bool(words & _GROUP_TERMS)
 
 def _mentioned(name: str, source: str) -> bool:
     n = _words(name)
@@ -110,11 +108,11 @@ def sanitize_plan(plan: dict[str, Any], source_script: str | None = None) -> dic
 
 def install() -> None:
     """Wrap the existing director once, retaining all its drawing and audio code."""
-    import lego_director as director
+    import lego_ai as ai
 
-    if getattr(director.build_scenes, "_cinema_motion_fix", False):
+    if getattr(ai.build_scenes, "_cinema_motion_fix", False):
         return
-    original = director.build_scenes
+    original = ai.build_scenes
 
     def build_scenes_fixed(plan, tts=None):
         clean = sanitize_plan(plan)
@@ -159,4 +157,4 @@ def install() -> None:
         return rendered, genre, title
 
     build_scenes_fixed._cinema_motion_fix = True
-    director.build_scenes = build_scenes_fixed
+    ai.build_scenes = build_scenes_fixed
