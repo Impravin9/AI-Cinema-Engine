@@ -51,6 +51,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--source", choices=("auto", "photo", "gen"), default="auto",
                         help="Visual source strategy in realistic mode.")
     parser.add_argument("--media", default="media", help="Folder containing numbered local scene images.")
+    parser.add_argument("--video-dir", default="media/videos", help="Folder containing optional generated scene clips (scene_001.mp4, etc.).")
     parser.add_argument("--music", default="music", help="Folder containing royalty-free music tracks.")
     parser.add_argument("--cache", default="cache", help="Visual/audio cache directory.")
     parser.add_argument("--tts-voice", default="en-US-AndrewMultilingualNeural",
@@ -126,7 +127,7 @@ def build_renderer_args(args: argparse.Namespace) -> tuple[str, list[str]]:
         command += ["--save-plan", args.save_plan]
     if args.prompt_only:
         command.append("--prompt-only")
-    command += ["--source", args.source, "--media", args.media, "--music", args.music, "--cache", args.cache]
+    command += ["--source", args.source, "--media", args.media, "--video-dir", args.video_dir, "--music", args.music, "--cache", args.cache]
     command += ["--voice", args.tts_voice, "--rate", args.rate, "--musicvol", str(args.musicvol)]
     if args.content_style:
         command += ["--style", args.content_style]
