@@ -129,3 +129,8 @@ python -m unittest discover -s tests -v
 The free pipeline is image-first: it retrieves licence-filtered archival stills and turns them into cinematic sequences with local movement, grading, transitions, narration, music and sound design. It does not currently generate photorealistic moving footage locally. User-supplied moving clips are supported when their rights are clear. A future local video model would need to be evaluated for Intel hardware before it can be added without cloud fees.
 
 Intel QSV is an optional H.264 encoding acceleration only. It does not generate images or video. Intel QSV is selected only after a real FFmpeg runtime probe; CPU encoding remains the fallback.
+
+
+## Visual candidate selection
+
+The realistic renderer supports multiple licensed image candidates per scene, a comparison contact sheet, a persistent manual selection file, and offline rendering. See [VISUAL_SELECTION.md](VISUAL_SELECTION.md) for the complete workflow.
