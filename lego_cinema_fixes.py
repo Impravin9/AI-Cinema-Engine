@@ -40,9 +40,15 @@ def _is_group(name: str, role: str | None) -> bool:
 def _mentioned(name: str, source: str) -> bool:
     n = _words(name)
     s = set(_words(source))
-    # Require at least one meaningful name token to occur in the user's script.
-    # For multi-word historical names, matching the surname is sufficient.
-    return any(len(token) > 2 and token in s for token in n)
+    # For multi-word names, require the full name or the final name token
+    # (normally the surname). Do not whitelist "General Eisenhower" merely
+    # because the script contains the common word "general".
+    if not n:
+        return False
+    if len(n) == 1:
+        return len(n[0]) > 2 and n[0] in s
+    full_name = " ".join(n)
+    return full_name in " ".join(_words(source)) or (len(n[-1]) > 2 and n[-1] in s)
 
 def _scene_action(text: str, role: str = "") -> str:
     t = " " + " ".join(_words(text)) + " "
