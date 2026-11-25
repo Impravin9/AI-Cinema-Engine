@@ -4,6 +4,8 @@ from __future__ import annotations
 import argparse, json, os, shutil, subprocess, sys, tempfile, re
 from pathlib import Path
 
+from cinematic_director import direct_plan
+
 def split_script(text):
     parts = [x.strip() for x in re.split(r'(?<=[.!?])\s+', text) if x.strip()]
     if not parts:
@@ -27,8 +29,12 @@ elif "BLENDER_EEVEE" in engine_ids:
     s.render.engine = "BLENDER_EEVEE"
 else:
     raise RuntimeError("No Eevee render engine is available in this Blender build. Available engines: " + ", ".join(sorted(engine_ids)))
-s.render.resolution_x=640 if preview else 1280; s.render.resolution_y=360 if preview else 720; s.render.resolution_percentage=100
+s.render.resolution_x=640 if preview else 960; s.render.resolution_y=360 if preview else 540; s.render.resolution_percentage=100
 s.render.fps=fps
+s.render.use_persistent_data=True
+s.render.threads_mode='FIXED'; s.render.threads=2 if preview else 4
+if hasattr(s, 'eevee') and hasattr(s.eevee, 'taa_render_samples'):
+ s.eevee.taa_render_samples=8 if preview else 16
 # Blender 5.x separates the media type from the image/video format.
 s.render.image_settings.media_type = "VIDEO"
 s.render.image_settings.file_format = "FFMPEG"
@@ -99,21 +105,51 @@ for idx,scn in enumerate(scenes):
  text=str(scn.get("text","")); low=text.lower()
  start=frame; end=frame+max(1,int(seconds*fps))-1
  caption.data.body=text[:105]
- # Character moves through a simple motivated action: approach, turn, react, then settle.
- root.location=(0,0,0); root.rotation_euler=(0,0,0)
+ # Motivate character travel and acting from the director's scene metadata.
+ action=str(scn.get('action','observe')); mood=str(scn.get('mood','determined'))
+ travel={'walk':0.85,'run':1.45,'fall':0.18}.get(action,0.22)
+ direction=-1 if idx%2 else 1
+ root.location=(-travel*.5*direction,0,0); root.rotation_euler=(0,0,0)
  root.keyframe_insert("location",frame=start); root.keyframe_insert("rotation_euler",frame=start)
- root.location=(.20 if idx%2==0 else -.20,0,0); root.rotation_euler[2]=math.radians(-8 if any(w in low for w in ("fear","afraid","attack","danger")) else 8)
+ root.location=(travel*.5*direction,0,0); root.rotation_euler[2]=math.radians(-12 if mood in ('fear','sadness') else 10)
  root.keyframe_insert("location",frame=end); root.keyframe_insert("rotation_euler",frame=end)
- # Natural arm gesture and readable emotional change.
- for j,obj in enumerate(limbs[:2]):
+ # Arm gestures plus alternating leg swings for walk/run beats.
+ for j,obj in enumerate(limbs):
   obj.keyframe_insert("rotation_euler",frame=start)
-  obj.rotation_euler[1]=math.radians((-18 if j==0 else 18) if any(w in low for w in ("said","speak","speech","ordered","believe","promise")) else (8 if j==0 else -8))
+  if action in ('walk','run') and j in (2,3,6,7):
+   phase=1 if j in (2,7) else -1
+   amount=22 if action=='run' else 12
+   obj.rotation_euler[1]=math.radians(phase*amount)
+  elif j in (0,1):
+   obj.rotation_euler[1]=math.radians((-18 if j==0 else 18) if action=='speak' else (10 if j==0 else -10))
   obj.keyframe_insert("rotation_euler",frame=start+int((end-start)*.45))
   obj.rotation_euler[1]=0; obj.keyframe_insert("rotation_euler",frame=end)
  # Mouth opens subtly for speech; brows/eyes are intentionally understated.
  mouth.scale=(.105,.025,.045 if any(w in low for w in ("said","speak","speech","shout")) else .018); mouth.keyframe_insert("scale",frame=start); mouth.keyframe_insert("scale",frame=end)
- cam.location=(3.2 if idx%3==0 else 2.7,-7.8,2.9 if idx%2==0 else 2.65)
- cam.rotation_euler=(Vector((0,0,1.35))-cam.location).to_track_quat("-Z","Y").to_euler(); cam.keyframe_insert("location",frame=start); cam.keyframe_insert("rotation_euler",frame=start)
+ shot=str(scn.get('shot_type','medium'))
+ profiles={
+  'wide':((3.8,-9.5,3.1),35,(0,0,1.2)),
+  'medium_wide':((3.0,-8.0,2.8),40,(0,0,1.35)),
+  'medium':((2.5,-6.8,2.65),50,(0,0,1.4)),
+  'medium_close':((1.2,-5.2,2.45),65,(0,0,1.85)),
+  'close_up':((0.6,-4.2,2.35),75,(0,0,2.1)),
+ }
+ base,lens,target=profiles.get(shot,profiles['medium'])
+ cam.data.lens=lens
+ base_v=Vector(base); target_v=Vector(target)
+ move=str(scn.get('camera_move','slow_pan'))
+ if move=='push_in': cam.location=base_v+(base_v-target_v)*0.10
+ elif move=='pull_back': cam.location=base_v
+ elif move=='tracking': cam.location=base_v+Vector((-0.45*direction,0,0))
+ else: cam.location=base_v+Vector((0.12 if idx%2 else -0.12,0,0))
+ cam.rotation_euler=(target_v-cam.location).to_track_quat("-Z","Y").to_euler()
+ cam.keyframe_insert("location",frame=start); cam.keyframe_insert("rotation_euler",frame=start)
+ if move=='push_in': cam.location=base_v
+ elif move=='pull_back': cam.location=base_v+(base_v-target_v)*0.12
+ elif move=='tracking': cam.location=base_v+Vector((0.45*direction,0,0))
+ else: cam.location=base_v+Vector((-0.12 if idx%2 else 0.12,0,0))
+ cam.rotation_euler=(target_v-cam.location).to_track_quat("-Z","Y").to_euler()
+ cam.keyframe_insert("location",frame=end); cam.keyframe_insert("rotation_euler",frame=end)
  frame=end+1
 s.frame_start=1; s.frame_end=frame-1; s.render.filepath=output
 s.render.image_settings.color_mode="RGB"
@@ -133,6 +169,8 @@ def main():
     else:
         plan={"title":Path(a.script).stem,"scenes":split_script(source)}
     if not plan["scenes"]: raise ValueError("No scenes found in script.")
+    plan["scenes"] = direct_plan(plan["scenes"])
+    print("[animation] Director: offline shot/action planning enabled.", flush=True)
     if a.max_scenes is not None:
         if a.max_scenes < 1: raise ValueError("--max-scenes must be at least 1.")
         plan["scenes"] = plan["scenes"][:a.max_scenes]
