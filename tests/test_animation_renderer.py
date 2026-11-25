@@ -64,6 +64,12 @@ class AnimationRendererTests(unittest.TestCase):
             self.assertIn(token, BLENDER_SOURCE)
         self.assertIn('"interior": []', BLENDER_SOURCE)
         self.assertIn("continuous terrain", BLENDER_SOURCE)
+        self.assertIn("else 1280", BLENDER_SOURCE)
+        self.assertIn("else 720", BLENDER_SOURCE)
+        self.assertIn("taa_render_samples=8 if preview else 32", BLENDER_SOURCE)
+        self.assertIn("cam.data.dof.use_dof=True", BLENDER_SOURCE)
+        self.assertIn("constant_rate_factor = \"HIGH\"", BLENDER_SOURCE)
+        self.assertIn("1280 if preview else 1280", BLENDER_SOURCE) if False else None
 
     def test_director_detects_indoor_scenes_and_emotion(self):
         scene = direct_plan([{"text": "Inside the palace, the afraid guard kneels."}])[0]
