@@ -94,6 +94,25 @@ The default licence filter is intentionally conservative: Public Domain/PDM, CC0
 
 The Openverse API is free to access subject to its terms and rate limits; Openverse may change its terms, so review them before large-scale/commercial API use. No API key is required for ordinary anonymous queries at the time of writing.
 
+
+### Fully local procedural animation mode (new)
+
+For original visuals with no stock-image sites, online footage, external image APIs or downloaded visual assets, use the experimental Blender animation backend:
+
+```powershell
+winget install BlenderFoundation.Blender
+python cinema.py myscript.txt output_animation.mp4 --style animation
+```
+
+You can also reuse a storyboard:
+```powershell
+python cinema.py myscript.txt output_animation.mp4 --style animation --plan plan.json
+```
+
+The animation backend creates its visuals locally from procedural 3D geometry, materials, lighting, a camera and a reusable human-like character. It does not contact Wikimedia, Openverse, image-generation websites or video-generation services. It is an early prototype—not yet a finished photorealistic character-animation system: facial acting, detailed rigging, lip-sync, multiple interacting characters, crowd simulation, historical costumes and audio integration remain future work. It saves a companion .blend project beside the MP4. Set `BLENDER_EXE` if Blender is not on PATH.
+
+This mode is separate from the existing realistic archive-photo mode. LEGO mode remains available. The animation backend does not require online LLM planning; without `--plan`, it splits the supplied script into scene beats locally.
+
 ### LEGO mode
 
 ```powershell
