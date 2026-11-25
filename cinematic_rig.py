@@ -122,6 +122,17 @@ for idx, scn in enumerate(scenes):
             env_obj.hide_render = not visible
             env_obj.keyframe_insert(data_path="hide_render", frame=start)
             env_obj.keyframe_insert(data_path="hide_render", frame=end)
+            if env_name == "smoke" and visible:
+                base_location = Vector(env_obj["base_location"])
+                base_scale = Vector(env_obj["base_scale"])
+                env_obj.location = base_location
+                env_obj.scale = base_scale
+                env_obj.keyframe_insert(data_path="location", frame=start)
+                env_obj.keyframe_insert(data_path="scale", frame=start)
+                env_obj.location = base_location + Vector((.12, 0, .72 + idx*.025))
+                env_obj.scale = base_scale * 1.35
+                env_obj.keyframe_insert(data_path="location", frame=end)
+                env_obj.keyframe_insert(data_path="scale", frame=end)
 
     caption.data.body = text[:105]
     action = str(scn.get("action", "observe"))
