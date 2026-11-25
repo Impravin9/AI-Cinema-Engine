@@ -43,7 +43,7 @@ if character_asset:
         raise RuntimeError("The selected .blend contains no mesh character objects.")
     # Parent imported top-level objects under a neutral cinematic root while
     # preserving their authored world transforms and internal armature hierarchy.
-    asset_root = bpy.data.objects.new("AUTHORED_CHARACTER_ROOT", None)
+    asset_root = bpy.data.objects.new("AUTHORED_ASSET_ROOT", None)
     s.collection.objects.link(asset_root)
     for obj in imported:
         if obj.parent is None:
