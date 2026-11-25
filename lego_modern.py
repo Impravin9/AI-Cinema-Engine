@@ -529,6 +529,7 @@ def main():
     if not a.offline:
         net_check()
     print(f'asset library: {library_dir} | offline={a.offline}', flush=True)
+    total_assets = len(plan['scenes'])
     # Preflight every scene before TTS or video rendering. A partial download is saved
     # scene-by-scene so a later run resumes without re-downloading completed scenes.
     for asset_i, asset_scene in enumerate(plan['scenes']):
@@ -539,7 +540,7 @@ def main():
             asset_path, record = saved
             try:
                 prepared_assets[asset_i] = (Image.open(asset_path).convert('RGB'), record.get('credit_and_source', 'Local project asset'))
-                print(f'asset {asset_i + 1}/{len(plan[\'scenes\'])}: reused local library', flush=True)
+                print(f'asset {asset_i + 1}/{total_assets}: reused local library', flush=True)
                 continue
             except Exception:
                 pass
