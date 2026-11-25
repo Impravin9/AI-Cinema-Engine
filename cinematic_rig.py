@@ -201,6 +201,51 @@ for idx, scn in enumerate(scenes):
             root.keyframe_insert("rotation_euler", frame=start + max(1, duration//3))
             root.rotation_euler[1] = math.radians(lean * .25)
             root.keyframe_insert("rotation_euler", frame=end)
+        # Distinct playable poses: combat has alternating strikes, pointing has a held
+        # reach, and kneeling/sitting use articulated leg joints instead of a fake fall.
+        if action == "kneel":
+            root.location.z = -.28
+            root.keyframe_insert("location", frame=start)
+            for hip, knee, ankle, side in leg_rigs:
+                hip.rotation_euler[1] = math.radians(-12)
+                knee.rotation_euler[1] = math.radians(88)
+                ankle.rotation_euler[1] = math.radians(-18)
+                for obj in (hip, knee, ankle):
+                    obj.keyframe_insert("rotation_euler", frame=start)
+                    obj.keyframe_insert("rotation_euler", frame=end)
+        elif action == "sit":
+            root.location.z = -.34
+            root.keyframe_insert("location", frame=start)
+            for hip, knee, ankle, side in leg_rigs:
+                hip.rotation_euler[1] = math.radians(78)
+                knee.rotation_euler[1] = math.radians(82)
+                ankle.rotation_euler[1] = math.radians(-12)
+                for obj in (hip, knee, ankle):
+                    obj.keyframe_insert("rotation_euler", frame=start)
+                    obj.keyframe_insert("rotation_euler", frame=end)
+        elif action == "fight":
+            for shoulder, elbow, side in arm_rigs:
+                shoulder.rotation_euler[1] = math.radians(-18)
+                elbow.rotation_euler[1] = math.radians(-48)
+                shoulder.keyframe_insert("rotation_euler", frame=start)
+                elbow.keyframe_insert("rotation_euler", frame=start)
+                shoulder.rotation_euler[1] = math.radians(48 if side < 0 else -18)
+                elbow.rotation_euler[1] = math.radians(-12)
+                shoulder.keyframe_insert("rotation_euler", frame=start + max(1, duration//3))
+                elbow.keyframe_insert("rotation_euler", frame=start + max(1, duration//3))
+                shoulder.rotation_euler[1] = math.radians(-18 if side < 0 else 48)
+                elbow.rotation_euler[1] = math.radians(-12)
+                shoulder.keyframe_insert("rotation_euler", frame=start + max(2, 2*duration//3))
+                elbow.keyframe_insert("rotation_euler", frame=start + max(2, 2*duration//3))
+                shoulder.keyframe_insert("rotation_euler", frame=end)
+                elbow.keyframe_insert("rotation_euler", frame=end)
+            root.rotation_euler[1] = math.radians(-12)
+            root.keyframe_insert("rotation_euler", frame=start)
+            root.rotation_euler[1] = math.radians(12)
+            root.keyframe_insert("rotation_euler", frame=start + max(1, duration//2))
+            root.rotation_euler[1] = 0
+            root.keyframe_insert("rotation_euler", frame=end)
+
         for shoulder, elbow, side in arm_rigs:
             if action == "speak":
                 shoulder.rotation_euler[1] = math.radians(-24 if side < 0 else -12)
@@ -211,6 +256,9 @@ for idx, scn in enumerate(scenes):
             elif mood == "anger":
                 shoulder.rotation_euler[1] = math.radians(14)
                 elbow.rotation_euler[1] = math.radians(-12)
+            elif action == "point":
+                shoulder.rotation_euler[1] = math.radians(-62 if side > 0 else 8)
+                elbow.rotation_euler[1] = math.radians(-8 if side > 0 else -20)
             elif action == "fall":
                 shoulder.rotation_euler[1] = math.radians(-38 if side < 0 else 38)
                 elbow.rotation_euler[1] = math.radians(-24)
