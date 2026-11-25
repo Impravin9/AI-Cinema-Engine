@@ -24,10 +24,13 @@ jobs:
 
       - name: Compile cinematic modules
         run: |
-          python -m py_compile animation_renderer.py cinematic_director.py cinematic_rig.py cinematic_environment.py
+          python -m py_compile animation_renderer.py cinematic_director.py cinematic_rig.py cinematic_environment.py character_assets.py
 
       - name: Test animation renderer and generated Blender source
         run: python -m unittest discover -s tests -p "test_animation_renderer.py" -v
+
+      - name: Test authored character asset pipeline
+        run: python -m unittest discover -s tests -p "test_character_assets.py" -v
 
       - name: Test cinematic director
         run: python -m unittest discover -s tests -p "test_cinematic_director.py" -v
