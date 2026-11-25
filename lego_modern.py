@@ -4,7 +4,7 @@ lego_modern.py - realistic documentary renderer (licensed archive stills + cinem
 Same folder as lego_boost.py, lego_ai.py, lego_director.py, lego_engine_v2.py (reuses their LLM + DSP code, edits nothing).
   pip install edge-tts requests ; ffmpeg in PATH
   python lego_modern.py script.txt out.mp4                    # use --plan for a saved storyboard or --provider ollama for local planning -> fetch licensed visuals -> render
-  python lego_modern.py script.txt --prompt-only              # no key: paste modern_prompt.txt into Claude.ai, save reply as modern_plan.json
+  python lego_modern.py script.txt --prompt-only              # export a prompt; or use --plan with a saved storyboard
   python lego_modern.py script.txt out.mp4 --plan modern_plan.json     # (your old plan.json also works)
   flags: --voice en-US-AndrewMultilingualNeural|en-US-AriaNeural|en-GB-RyanNeural|en-IN-PrabhatNeural  --rate +0%  --pitch -2Hz
          --source auto|photo|gen   --media media/  --music music/   --preview (640x360 12fps)   --silent   --endcard   --style history|mythology|news|science|animals|story
@@ -519,7 +519,7 @@ def main():
     if a.plan: plan = json.load(open(a.plan, encoding='utf-8'))
     else:
         plan = ask_plan(script, a)
-        if not plan: raise SystemExit('No LLM key (ANTHROPIC_API_KEY / GEMINI_API_KEY / GROQ_API_KEY). Use --prompt-only, paste the prompt into Claude.ai and re-run with --plan modern_plan.json')
+        if not plan: raise SystemExit('No planning provider available. For a no-paid-service workflow, start local Ollama and rerun with --provider ollama, or supply an existing storyboard with --plan modern_plan.json.')
         json.dump(plan, open(a.save_plan, 'w', encoding='utf-8'), indent=1); print('plan saved', a.save_plan, flush=True)
     plan = prepare_plan(plan, script, a.style)
     plan = adapt(plan, a.style); style = plan['style']; W, H, FPS = (640, 360, 12) if a.preview else ((1920, 1080, 24) if a.resolution == '1080p' else (1280, 720, 24)); os.makedirs(a.cache, exist_ok=True); net_check(); used = set(); scenes = []; credits = []
