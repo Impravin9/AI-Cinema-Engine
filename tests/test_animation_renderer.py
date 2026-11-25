@@ -38,7 +38,11 @@ class AnimationRendererTests(unittest.TestCase):
         self.assertIn('env_obj["base_location"]', BLENDER_SOURCE)
         self.assertNotIn("CHARACTER_ROOT", BLENDER_SOURCE)
 
-    def test_rig_object_collection_flattens_tuple_records(self):\n        self.assertIn("[obj for arm in arm_rigs for obj in arm[:2]]", BLENDER_SOURCE)\n        self.assertIn("[obj for leg in leg_rigs for obj in leg[:3]]", BLENDER_SOURCE)\n\n    def test_director_adds_actions_and_camera_metadata(self):
+    def test_rig_object_collection_flattens_tuple_records(self):
+        self.assertIn("[obj for arm in arm_rigs for obj in arm[:2]]", BLENDER_SOURCE)
+        self.assertIn("[obj for leg in leg_rigs for obj in leg[:3]]", BLENDER_SOURCE)
+
+    def test_director_adds_actions_and_camera_metadata(self):
         scenes = direct_plan([
             {"text": "A young man runs through the forest."},
             {"text": "He notices smoke rising above the trees."},
