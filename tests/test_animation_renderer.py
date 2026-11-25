@@ -43,6 +43,14 @@ class AnimationRendererTests(unittest.TestCase):
         self.assertIn('env_obj["base_location"]', BLENDER_SOURCE)
         self.assertNotIn("CHARACTER_ROOT", BLENDER_SOURCE)
 
+    def test_hero_is_a_stylized_cartoon_with_expressive_face(self):
+        for feature in ("large cartoon face", "sculpted fringe", "eye sparkle",
+                        "cheek blush", "rounded boot_", "Facial performance",
+                        "Reset every articulated joint"):
+            self.assertIn(feature, BLENDER_SOURCE)
+        self.assertIn("eye_rigs.append(eye)", BLENDER_SOURCE)
+        self.assertIn("mouth_open", BLENDER_SOURCE)
+
     def test_rig_object_collection_flattens_tuple_records(self):
         self.assertIn("[obj for arm in arm_rigs for obj in arm[:2]]", BLENDER_SOURCE)
         self.assertIn("[obj for leg in leg_rigs for obj in leg[:3]]", BLENDER_SOURCE)
