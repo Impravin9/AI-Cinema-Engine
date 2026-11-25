@@ -14,7 +14,7 @@ BLENDER_SOURCE = r'''
 import bpy, sys, json, math, os
 from mathutils import Vector
 args = sys.argv[sys.argv.index("--")+1:]
-plan_path, output, fps, seconds = args[0], args[1], int(args[2]), float(args[3])
+plan_path, output, fps, seconds, preview = args[0], args[1], int(args[2]), float(args[3]), args[4] == "1"
 plan=json.load(open(plan_path,encoding="utf-8"))
 scenes=plan.get("scenes") or [{"text":plan.get("title","A cinematic moment")}]
 bpy.ops.object.select_all(action="SELECT"); bpy.ops.object.delete(use_global=False)
@@ -27,7 +27,7 @@ elif "BLENDER_EEVEE" in engine_ids:
     s.render.engine = "BLENDER_EEVEE"
 else:
     raise RuntimeError("No Eevee render engine is available in this Blender build. Available engines: " + ", ".join(sorted(engine_ids)))
-s.render.resolution_x=1280; s.render.resolution_y=720; s.render.resolution_percentage=100
+s.render.resolution_x=640 if preview else 1280; s.render.resolution_y=360 if preview else 720; s.render.resolution_percentage=100
 s.render.fps=fps
 # Blender 5.x separates the media type from the image/video format.
 s.render.image_settings.media_type = "VIDEO"
@@ -124,7 +124,7 @@ bpy.ops.render.render(animation=True)
 def main():
     p=argparse.ArgumentParser(description="Fully local procedural 3D animation renderer (no image websites or online assets).")
     p.add_argument("script"); p.add_argument("out"); p.add_argument("--plan"); p.add_argument("--blender")
-    p.add_argument("--fps",type=int,default=24); p.add_argument("--seconds",type=float,default=6.0); p.add_argument("--max-scenes",type=int,help="Render only the first N scenes."); p.add_argument("--silent",action="store_true")
+    p.add_argument("--fps",type=int,default=24); p.add_argument("--seconds",type=float,default=6.0); p.add_argument("--max-scenes",type=int,help="Render only the first N scenes."); p.add_argument("--preview",action="store_true",help="Use 640x360 and a short low-frame-rate test render."); p.add_argument("--silent",action="store_true")
     a=p.parse_args()
     source=Path(a.script).read_text(encoding="utf-8")
     if a.plan:
@@ -143,14 +143,33 @@ def main():
     with tempfile.TemporaryDirectory(prefix="ai_cinema_animation_") as td:
         plan_path=Path(td)/"plan.json"; py_path=Path(td)/"render_scene.py"
         plan_path.write_text(json.dumps(plan,ensure_ascii=False),encoding="utf-8"); py_path.write_text(BLENDER_SOURCE,encoding="utf-8")
-        cmd=[blender,"-b","-t","4","--python",str(py_path),"--",str(plan_path),str(out),str(max(12,min(60,a.fps))),str(max(2.0,min(20.0,a.seconds)))]
+        fps = max(6, min(12, a.fps)) if a.preview else max(12, min(60, a.fps))
+        seconds = max(1.0, min(2.0, a.seconds)) if a.preview else max(2.0, min(20.0, a.seconds))
+        cmd=[blender,"-b","-t","2" if a.preview else "4","--python",str(py_path),"--",str(plan_path),str(out),str(fps),str(seconds),"1" if a.preview else "0"]
         print("[animation] Backend: local Blender procedural 3D",flush=True)
         print("[animation] Visual source: generated geometry/materials/lighting only; no external image or footage requests.",flush=True)
         print(f"[animation] Scenes: {len(plan['scenes'])}; target: {out}",flush=True)
+        if a.preview: print("[animation] Preview mode: 640x360, maximum 12 fps, maximum 2 seconds per scene.",flush=True)
         result=subprocess.run(cmd)
         if result.returncode: return result.returncode
-    if not out.is_file(): raise RuntimeError("Blender finished without creating the requested MP4.")
-    print(f"[animation] Render complete: {out}",flush=True)
+    if not out.is_file() or out.stat().st_size < 1024:
+        size = out.stat().st_size if out.is_file() else 0
+        raise RuntimeError(f"Blender did not produce a valid MP4 (output size: {size} bytes). Check the Blender render/FFmpeg messages above.")
+    ffprobe = shutil.which("ffprobe")
+    if ffprobe:
+        check = subprocess.run(
+            [ffprobe, "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=codec_name,width,height", "-show_entries", "format=duration", "-of", "json", str(out)],
+            capture_output=True, text=True, check=False,
+        )
+        if check.returncode != 0:
+            raise RuntimeError("The MP4 file failed FFprobe validation: " + (check.stderr.strip() or "unknown container/codec error"))
+        try:
+            media = json.loads(check.stdout)
+            if not media.get("streams") or float(media.get("format", {}).get("duration", 0)) <= 0:
+                raise ValueError("missing video stream or zero duration")
+        except (ValueError, TypeError, json.JSONDecodeError) as exc:
+            raise RuntimeError(f"The MP4 file is incomplete or has no playable video stream: {exc}") from exc
+    print(f"[animation] Render complete: {out} ({out.stat().st_size:,} bytes)",flush=True)
     return 0
 
 if __name__=="__main__":
