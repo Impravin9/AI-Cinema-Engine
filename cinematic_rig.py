@@ -89,7 +89,13 @@ def key_linear(obj):
     if not obj.animation_data or not obj.animation_data.action:
         return
     action = obj.animation_data.action
-    for fc in action.fcurves:
+    try:
+        curves = action.fcurves
+    except (AttributeError, RuntimeError):
+        # Blender 5.x may expose layered actions rather than legacy fcurves.
+        # Default Bezier interpolation is still valid; do not fail the render.
+        return
+    for fc in curves:
         for key in fc.keyframe_points:
             key.interpolation = "LINEAR"
 
