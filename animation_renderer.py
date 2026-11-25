@@ -19,7 +19,14 @@ plan=json.load(open(plan_path,encoding="utf-8"))
 scenes=plan.get("scenes") or [{"text":plan.get("title","A cinematic moment")}]
 bpy.ops.object.select_all(action="SELECT"); bpy.ops.object.delete(use_global=False)
 s=bpy.context.scene
-s.render.engine="BLENDER_EEVEE_NEXT"
+# Blender renamed/removed Eevee engine identifiers across major versions.
+engine_ids = {item.identifier for item in bpy.types.RenderSettings.bl_rna.properties["engine"].enum_items}
+if "BLENDER_EEVEE_NEXT" in engine_ids:
+    s.render.engine = "BLENDER_EEVEE_NEXT"
+elif "BLENDER_EEVEE" in engine_ids:
+    s.render.engine = "BLENDER_EEVEE"
+else:
+    raise RuntimeError("No Eevee render engine is available in this Blender build. Available engines: " + ", ".join(sorted(engine_ids)))
 s.render.resolution_x=1280; s.render.resolution_y=720; s.render.resolution_percentage=100
 s.render.fps=fps
 s.render.image_settings.file_format="FFMPEG"
