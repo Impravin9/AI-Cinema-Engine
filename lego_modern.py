@@ -174,17 +174,50 @@ def src_pexels(qs, used):
                 if p['src']['large2x'] in used: continue
                 used.add(p['src']['large2x']); return Image.open(io.BytesIO(http(p['src']['large2x']))), f"Pexels | {p['photographer']} | Pexels License | {p['url']}"
         except Exception as e: Net.bad('pexels', e)
-def src_gemini(prompt):
+def src_gemini(prompt, reference_paths=None):
     k = os.environ.get('GEMINI_API_KEY') or os.environ.get('GOOGLE_API_KEY')
     if not k: return
     try:
-        m = os.environ.get('GEMINI_IMAGE_MODEL', 'gemini-2.5-flash-image'); body = json.dumps(dict(contents=[dict(parts=[dict(text=prompt + ' Wide 16:9 cinematic frame, no text, no watermark.')])], generationConfig=dict(responseModalities=['IMAGE']))).encode()
+        parts = [dict(text=prompt + ' Wide 16:9 cinematic frame, no text, no watermark.')]
+        for ref_path in (reference_paths or [])[:3]:
+            if os.path.isfile(ref_path):
+                with open(ref_path, 'rb') as ref_file:
+                    parts.append(dict(inline_data=dict(mime_type='image/jpeg', data=base64.b64encode(ref_file.read()).decode('ascii'))))
+        m = os.environ.get('GEMINI_IMAGE_MODEL', 'gemini-2.5-flash-image'); body = json.dumps(dict(contents=[dict(parts=parts)], generationConfig=dict(responseModalities=['IMAGE']))).encode()
         rq = urllib.request.Request(f'https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent?key={k}', body, {'content-type': 'application/json'})
         r = json.load(urllib.request.urlopen(rq, timeout=120))
         for p in r['candidates'][0]['content']['parts']:
             d = p.get('inlineData') or p.get('inline_data')
             if d: return Image.open(io.BytesIO(base64.b64decode(d['data']))), 'AI generated (Gemini)'
     except Exception as e: Net.bad('gemini', e)
+def character_reference(character, cache):
+    """Create one reusable identity portrait per named character when Gemini is configured."""
+    if not (os.environ.get('GEMINI_API_KEY') or os.environ.get('GOOGLE_API_KEY')):
+        return None
+    name = str(character.get('name') or '').strip()
+    if not name:
+        return None
+    folder = os.path.join(cache, 'characters')
+    os.makedirs(folder, exist_ok=True)
+    slug = re.sub(r'[^a-z0-9]+', '_', name.lower()).strip('_')[:48] or 'character'
+    path = os.path.join(folder, slug + '.jpg')
+    if os.path.isfile(path):
+        return path
+    role = str(character.get('role') or 'historical figure')
+    prompt = (
+        "Create a single photorealistic cinematic identity-reference portrait for visual continuity. "
+        f"Subject: {name}, role: {role}. Depict a historically appropriate appearance and period clothing. "
+        "Chest-up portrait, neutral dark background, natural soft key light, face clearly visible, "
+        "realistic human proportions, no text, no logos, no watermark, no collage. "
+        "This is a reusable visual identity reference, not a movie poster."
+    )
+    result = src_gemini(prompt)
+    if not result:
+        return None
+    result[0].convert('RGB').save(path, quality=94)
+    print(f'   -> character reference created: {name}', flush=True)
+    return path
+
 _pl = [0.0]
 def src_pollinations(prompt, seed):
     if not Net.ok('pollinations'): return
@@ -215,6 +248,13 @@ def fetch(i, s, a, style, used, cache):
         if a.allow_cards or not cached_credit.startswith('designed card'):
             return Image.open(cp).convert('RGB'), cached_credit
     r = src_local(i, a.media); gp = s['gen_prompt']
+    character_refs = []
+    for character in (s.get('named_characters') or []):
+        ref = character_reference({'name': character}, cache)
+        if ref:
+            character_refs.append(ref)
+    if character_refs:
+        gp += " Maintain the exact identity, facial features, age and hairstyle from the supplied character reference image(s)."
     if a.source == 'gen':
         order = ['gen']
     elif a.source == 'photo':
@@ -223,7 +263,7 @@ def fetch(i, s, a, style, used, cache):
         order = ['photo', 'gen'] if s['visual'] == 'photo' else ['gen', 'photo']
     for kind in order:
         if r: break
-        r = (src_commons(s['queries'], used) or src_pexels(s['queries'], used)) if kind == 'photo' else (src_gemini(gp) or src_pollinations(gp, i * 7 + 3))
+        r = (src_commons(s['queries'], used) or src_pexels(s['queries'], used)) if kind == 'photo' else (src_gemini(gp, character_refs) or src_pollinations(gp, i * 7 + 3))
     if not r:
         if not a.allow_cards:
             raise RuntimeError(
