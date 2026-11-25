@@ -249,10 +249,11 @@ def fetch(i, s, a, style, used, cache):
             return Image.open(cp).convert('RGB'), cached_credit
     r = src_local(i, a.media); gp = s['gen_prompt']
     character_refs = []
-    for character in (s.get('named_characters') or []):
-        ref = character_reference({'name': character}, cache)
-        if ref:
-            character_refs.append(ref)
+    if not r and a.source != 'photo':
+        for character in (s.get('named_characters') or []):
+            ref = character_reference({'name': character}, cache)
+            if ref:
+                character_refs.append(ref)
     if character_refs:
         gp += " Maintain the exact identity, facial features, age and hairstyle from the supplied character reference image(s)."
     if a.source == 'gen':
