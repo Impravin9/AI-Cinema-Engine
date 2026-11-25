@@ -47,6 +47,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     # Fully local procedural animation options
     parser.add_argument("--blender", help="Path to Blender executable (or set BLENDER_EXE).")
+    parser.add_argument("--character-asset", help="Licensed Blender .blend character asset for animation mode.")
     parser.add_argument("--animation-fps", type=int, default=15, help="Animation frame rate.")
     parser.add_argument("--animation-seconds", type=float, default=6.0, help="Seconds per generated scene.")
     parser.add_argument("--max-scenes", type=int, help="Render only the first N scenes (useful for short tests).")
@@ -124,6 +125,8 @@ def build_renderer_args(args: argparse.Namespace) -> tuple[str, list[str]]:
             command += ["--plan", str(Path(args.plan).expanduser().resolve())]
         if args.blender:
             command += ["--blender", args.blender]
+        if args.character_asset:
+            command += ["--character-asset", args.character_asset]
         command += ["--fps", str(args.animation_fps), "--seconds", str(args.animation_seconds)]
         if args.max_scenes is not None:
             command += ["--max-scenes", str(args.max_scenes)]

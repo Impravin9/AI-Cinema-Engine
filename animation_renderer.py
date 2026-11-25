@@ -5,18 +5,22 @@ import argparse, json, os, shutil, subprocess, sys, tempfile, re
 from pathlib import Path
 
 from cinematic_director import direct_plan
+from cinematic_environment import upgrade_environment_source
+from cinematic_rig import upgrade_blender_source
+from character_assets import validate_character_asset, inject_character_import
 
 def split_script(text):
     parts = [x.strip() for x in re.split(r'(?<=[.!?])\s+', text) if x.strip()]
     if not parts:
         parts = [text.strip()]
-    return [{"text": p, "visual": "cinematic_character", "mood": "determined"} for p in parts]
+    return [{"text": p, "visual": "cinematic_character"} for p in parts]
 
 BLENDER_SOURCE = r'''
 import bpy, sys, json, math, os
 from mathutils import Vector
 args = sys.argv[sys.argv.index("--")+1:]
 plan_path, output, fps, seconds, preview = args[0], args[1], int(args[2]), float(args[3]), args[4] == "1"
+character_asset = args[5] if len(args) > 5 else ""
 plan=json.load(open(plan_path,encoding="utf-8"))
 scenes=plan.get("scenes") or [{"text":plan.get("title","A cinematic moment")}]
 bpy.ops.object.select_all(action="SELECT"); bpy.ops.object.delete(use_global=False)
@@ -29,18 +33,18 @@ elif "BLENDER_EEVEE" in engine_ids:
     s.render.engine = "BLENDER_EEVEE"
 else:
     raise RuntimeError("No Eevee render engine is available in this Blender build. Available engines: " + ", ".join(sorted(engine_ids)))
-s.render.resolution_x=640 if preview else 960; s.render.resolution_y=360 if preview else 540; s.render.resolution_percentage=100
+s.render.resolution_x=640 if preview else 1280; s.render.resolution_y=360 if preview else 720; s.render.resolution_percentage=100
 s.render.fps=fps
 s.render.use_persistent_data=True
 s.render.threads_mode='FIXED'; s.render.threads=2 if preview else 4
 if hasattr(s, 'eevee') and hasattr(s.eevee, 'taa_render_samples'):
- s.eevee.taa_render_samples=8 if preview else 16
+ s.eevee.taa_render_samples=8 if preview else 32
 # Blender 5.x separates the media type from the image/video format.
 s.render.image_settings.media_type = "VIDEO"
 s.render.image_settings.file_format = "FFMPEG"
 s.render.ffmpeg.format = "MPEG4"
 s.render.ffmpeg.codec = "H264"
-s.render.ffmpeg.constant_rate_factor = "MEDIUM"
+s.render.ffmpeg.constant_rate_factor = "HIGH"
 s.render.filepath=output
 s.world.color=(0.025,0.025,0.025)
 s.view_settings.view_transform="AgX"
@@ -77,7 +81,7 @@ for x in (-4,0,4):
 for i in range(4):
  cloud=uv("forest smoke",(2.0+i*.13,1.1,1.1+i*.34),(.38+i*.08,.32+i*.08,.45+i*.09),smoke_mat); environment_objects["smoke"].append(cloud)
 # Character assembled as separate expressive parts; keyframes animate posture, gaze and gestures.
-root=bpy.data.objects.new("CHARACTER_ROOT",None); s.collection.objects.link(root)
+root=bpy.data.objects.new("LEGACY_TEMPLATE_ROOT",None); s.collection.objects.link(root)
 def part(o):
  o.parent=root; return o
 torso=part(uv("torso",(0,0,1.22),(.39,.24,.57),shirt))
@@ -111,10 +115,10 @@ def area(name,loc,power,color,size,target):
 area("warm key",(-3,-4,6),950,(1,.72,.48),5,(0,0,1.4))
 area("cool fill",(4,-2,3),600,(.35,.58,1),4,(0,0,1.4))
 area("rim",(0,3,4),1100,(1,.35,.12),3,(0,0,1.5))
-bpy.ops.object.camera_add(location=(3.2,-7.8,2.9)); cam=bpy.context.object; cam.rotation_euler=(Vector((0,0,1.35))-cam.location).to_track_quat("-Z","Y").to_euler(); cam.data.lens=48; s.camera=cam
+bpy.ops.object.camera_add(location=(3.2,-7.8,2.9)); cam=bpy.context.object; cam.rotation_euler=(Vector((0,0,1.35))-cam.location).to_track_quat("-Z","Y").to_euler(); cam.data.lens=48; cam.data.dof.use_dof=True; cam.data.dof.focus_object=root; cam.data.dof.aperture_fstop=5.6; s.camera=cam
 # A restrained title-card-free scene: no external textures, images, fonts or footage.
 caption_curve=bpy.data.curves.new("scene caption","FONT"); caption_curve.body=""; caption_curve.size=.25
-caption=bpy.data.objects.new("caption",caption_curve); s.collection.objects.link(caption); caption.location=(-2.3,-.2,.15); caption.rotation_euler=(math.radians(90),0,0); caption.data.materials.append(mat("caption ivory",(.9,.78,.54)))
+caption=bpy.data.objects.new("caption",caption_curve); s.collection.objects.link(caption); caption.location=(-2.3,-.2,.15); caption.rotation_euler=(math.radians(90),0,0); caption.data.materials.append(mat("caption ivory",(.9,.78,.54))); caption.hide_render=True
 # Animate all scenes in one continuous film; character acts are varied by semantic cues.
 frame=1
 for idx,scn in enumerate(scenes):
@@ -180,11 +184,18 @@ bpy.ops.wm.save_as_mainfile(filepath=output+".blend")
 bpy.ops.render.render(animation=True)
 '''
 
+BLENDER_SOURCE = upgrade_environment_source(BLENDER_SOURCE)
+BLENDER_SOURCE = upgrade_blender_source(BLENDER_SOURCE)
+BLENDER_SOURCE = inject_character_import(BLENDER_SOURCE)
+
+
 def main():
     p=argparse.ArgumentParser(description="Fully local procedural 3D animation renderer (no image websites or online assets).")
     p.add_argument("script"); p.add_argument("out"); p.add_argument("--plan"); p.add_argument("--blender")
+    p.add_argument("--character-asset", help="Path to a licensed Blender .blend character asset; replaces the procedural hero.")
     p.add_argument("--fps",type=int,default=15); p.add_argument("--seconds",type=float,default=6.0); p.add_argument("--max-scenes",type=int,help="Render only the first N scenes."); p.add_argument("--preview",action="store_true",help="Use 640x360 and a short low-frame-rate test render."); p.add_argument("--silent",action="store_true")
     a=p.parse_args()
+    character_asset = validate_character_asset(a.character_asset) if a.character_asset else None
     source=Path(a.script).read_text(encoding="utf-8")
     if a.plan:
         plan=json.loads(Path(a.plan).read_text(encoding="utf-8"))
@@ -212,8 +223,10 @@ def main():
         fps = max(6, min(12, a.fps)) if a.preview else max(12, min(60, a.fps))
         seconds = max(1.0, min(2.0, a.seconds)) if a.preview else max(2.0, min(20.0, a.seconds))
         cmd=[blender,"-b","-t","2" if a.preview else "4","--python",str(py_path),"--",str(plan_path),str(out),str(fps),str(seconds),"1" if a.preview else "0"]
-        print("[animation] Backend: local Blender procedural 3D",flush=True)
-        print("[animation] Visual source: generated geometry/materials/lighting only; no external image or footage requests.",flush=True)
+        if character_asset:
+            cmd.append(str(character_asset))
+        print("[animation] Backend: local Blender 3D with authored character asset" if character_asset else "[animation] Backend: local Blender procedural fallback",flush=True)
+        print("[animation] Character source: " + str(character_asset) if character_asset else "[animation] Character source: procedural fallback",flush=True)
         print(f"[animation] Scenes: {len(plan['scenes'])}; target: {out}",flush=True)
         if a.preview: print("[animation] Preview mode: 640x360, maximum 12 fps, maximum 2 seconds per scene.",flush=True)
         result=subprocess.run(cmd)

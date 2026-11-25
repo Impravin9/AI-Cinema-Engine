@@ -109,9 +109,25 @@ You can also reuse a storyboard:
 python cinema.py myscript.txt output_animation.mp4 --style animation --plan plan.json
 ```
 
-The animation backend is fully offline. Its deterministic `cinematic_director.py` reads each scene and assigns a basic action, mood, environment, shot size and camera move without loading an LLM or calling an API. Blender uses reusable low-complexity environment kits (forest, village, battlefield, water and mountains), shot-specific camera framing, simple character travel/gestures and reduced render defaults (960x540 at 15 fps; preview is 640x360). These changes reduce unnecessary work and make scene composition respond to the script. This remains an early procedural animation prototype—not photorealistic character animation: detailed rigging, convincing gait, nuanced facial acting, lip-sync, multiple interacting characters and advanced effects remain future work. It saves a companion .blend project beside the MP4. Set `BLENDER_EXE` if Blender is not on PATH.
+The animation backend is fully offline. Its deterministic `cinematic_director.py` assigns scene action, mood, environment, shot size and camera movement without loading an LLM or calling an API. `cinematic_rig.py` builds an articulated character with head, shoulder, elbow, hip, knee and ankle pivots; sampled alternating gait; posture/gesture beats; and a falling action. `cinematic_environment.py` builds reusable layered kits for landscape, forest, village, battlefield, interior, water and mountains, with procedural terrain materials, architectural detail, foliage, rocks, smoke drift and cinematic world lighting. The renderer keys camera focal length per scene and removes stale scene-caption text. Render defaults remain conservative for integrated graphics (960x540 at 15 fps; preview is 640x360). This is a significant procedural/stylized upgrade, not photorealistic human animation: realistic skin, cloth simulation, nuanced facial acting, phoneme-level lip-sync, multiple interacting characters and advanced volumetrics remain future work. It saves a companion .blend project beside the MP4. Set `BLENDER_EXE` if Blender is not on PATH.
 
 LEGO mode remains available with `--style lego`. The old archive-photo workflow is now opt-in only with `--style realistic`; it is not used by the default animation mode. The animation backend does not require online LLM planning; without `--plan`, it splits the supplied script into scene beats locally.
+
+### Authored cartoon character assets (new)
+
+The animation renderer accepts a licensed Blender `.blend` character asset and imports its authored mesh/armature instead of rendering the procedural hero. The asset is normalized to approximately 2.75 Blender units tall and attached to the engine's cinematic root so scene blocking and root motion still work.
+
+Download Blender Studio's Rain v4 from https://studio.blender.org/characters/rain/v4/ and place the downloaded `.blend` file at `assets/characters/rain_v4.blend`. Rain v4 is a production rig for Blender 5.2; this project targets Blender 5.3 but the asset must be verified in the local installation before a full film render. Credit the asset as required by its CC-BY licence: `Rain Rig (CC) Blender Foundation | studio.blender.org`.
+
+Run a short asset import test:
+
+```powershell
+python cinema.py cartoon_test.txt rain_character_preview.mp4 --style animation --character-asset assets/characters/rain_v4.blend --preview --animation-fps 8 --animation-seconds 2 --max-scenes 2
+```
+
+Important current boundary: this first asset-ingestion layer preserves the source armature and its controls, replaces the procedural hero, and supports engine-level root motion. It does **not** yet map Rain's proprietary Rigify controls to the director's walk/fight/speak actions, perform facial shape-key acting, or retarget Quaternius/Mixamo clips. Those mappings must be inspected and tested against the actual downloaded rig file; the engine intentionally refuses to guess bone names. Without `--character-asset`, the procedural fallback remains available.
+
+For scalable supporting casts and motion clips, see [Quaternius Universal Base Characters](https://quaternius.com/packs/universalbasecharacters) and [Universal Animation Library](https://quaternius.com/packs/universalanimationlibrary.html); both are CC0. Retargeting between their humanoid rig and Rain is a separate adapter task.
 
 ### LEGO mode
 
