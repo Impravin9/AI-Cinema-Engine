@@ -70,7 +70,7 @@ Optional generated/live-action scene clips can replace individual still images. 
 
 #### Generate moving scenes automatically (paid cloud GPU)
 
-The optional provider is Lightricks **LTX 2.3 Fast** through Replicate. It animates the director's scene reference image, uses the directed camera movement, and returns an MP4 that is assembled with the rest of the film. The local Intel GPU is used for local editing/encoding when QSV is available; video generation runs on Replicate's cloud GPU and is billed by Replicate.
+The optional provider is Lightricks **LTX 2.3 Fast** through Replicate. When a still reference exists, it uses image-to-video to animate that scene; otherwise it can generate from the shot prompt alone. It applies the directed camera movement and returns an MP4 that is assembled with the rest of the film. The local Intel GPU is used for local editing/encoding when QSV is available; video generation runs on Replicate's cloud GPU and is billed by Replicate.
 
 Set your Replicate token in PowerShell:
 
