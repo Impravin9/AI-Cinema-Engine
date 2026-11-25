@@ -32,6 +32,10 @@ class AnimationRendererTests(unittest.TestCase):
         self.assertIn('joint("elbow_"+label', BLENDER_SOURCE)
         self.assertIn('joint("knee_"+label', BLENDER_SOURCE)
         self.assertIn("cycles * 2", BLENDER_SOURCE)
+        self.assertIn('joint("ankle_"+label', BLENDER_SOURCE)
+        self.assertIn('joint("head_turn"', BLENDER_SOURCE)
+        self.assertIn('cam.data.keyframe_insert(data_path="lens"', BLENDER_SOURCE)
+        self.assertIn('env_obj["base_location"]', BLENDER_SOURCE)
         self.assertNotIn("CHARACTER_ROOT", BLENDER_SOURCE)
 
     def test_director_adds_actions_and_camera_metadata(self):
