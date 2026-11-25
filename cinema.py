@@ -28,7 +28,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("script", help="Input story/script text file.")
     parser.add_argument("out", nargs="?", default="output.mp4", help="Output MP4 path.")
-    parser.add_argument("--style", choices=("lego", "realistic"), default="realistic",
+    parser.add_argument("--style", choices=("lego", "realistic", "animation"), default="realistic",
                         help="Rendering backend to use.")
     parser.add_argument("--plan", help="Reuse an existing JSON storyboard plan.")
     parser.add_argument("--provider", choices=("auto", "anthropic", "gemini", "groq", "openrouter", "ollama"),
@@ -44,6 +44,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--tts", choices=("edge",), help="Enable Edge TTS for LEGO narration.")
     parser.add_argument("--voice-name", default="en-US-GuyNeural", help="Edge TTS voice for LEGO mode.")
     parser.add_argument("--voice-file", help="Existing narration audio file for LEGO mode.")
+
+    # Fully local procedural animation options
+    parser.add_argument("--blender", help="Path to Blender executable (or set BLENDER_EXE).")
+    parser.add_argument("--animation-fps", type=int, default=24, help="Animation frame rate.")
+    parser.add_argument("--animation-seconds", type=float, default=6.0, help="Seconds per generated scene.")
 
     # Realistic documentary options
     parser.add_argument("--content-style", choices=("history", "mythology", "news", "science", "animals", "story"),
@@ -108,6 +113,19 @@ def build_renderer_args(args: argparse.Namespace) -> tuple[str, list[str]]:
         if args.voice_file:
             require_file(args.voice_file, "Voice file")
             command += ["--voice", str(Path(args.voice_file).expanduser().resolve())]
+        return renderer, command
+
+    if args.style == "animation":
+        renderer = "animation_renderer.py"
+        command = [script, str(output)]
+        if args.plan:
+            require_file(args.plan, "Plan")
+            command += ["--plan", str(Path(args.plan).expanduser().resolve())]
+        if args.blender:
+            command += ["--blender", args.blender]
+        command += ["--fps", str(args.animation_fps), "--seconds", str(args.animation_seconds)]
+        if args.silent:
+            command.append("--silent")
         return renderer, command
 
     renderer = "lego_modern.py"
